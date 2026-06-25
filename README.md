@@ -3,7 +3,7 @@
 A minimal macOS client for browsing and downloading the scans your old
 scanner/printer relays through `lambada` (and, before that, `scandalous`).
 The main screen looks like a Samba share: a Finder-style grid of PDF
-thumbnails you click to select, then download to `~/Downloads`.
+thumbnails you click to select and double-click to download.
 
 ## Status: stopgap backend
 
@@ -30,8 +30,15 @@ GET /download/:filename
 On launch, zouk asks for a hostname or IP address (e.g.
 `scans.netpress.com` or `10.0.1.111:8080`) and remembers it for next time.
 If the server can't be reached, it shows an inline error and lets you
-retry or change the server. Once connected, click thumbnails to select
-scans and click Download to copy them to `~/Downloads`.
+retry or change the server. Once connected, click a thumbnail to see its
+date and size in the footer, and double-click to download it to
+`~/Downloads` (repeat downloads get Finder-style " (1)", " (2)" suffixes
+instead of overwriting). The pencil icon changes the server; the refresh
+icon re-fetches the list.
+
+Run `make run` rather than `swift run` directly -- it assembles a minimal
+`zouk.app` and launches it with `open`, so macOS activates it like a
+normal Mac app instead of leaving keystrokes going to the terminal.
 
 ## Building
 

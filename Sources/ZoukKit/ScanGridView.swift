@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 /// Finder/Samba-share-style icon grid: PDF thumbnail above, filename below.
-/// Click to select, "Download" copies the selected files to ~/Downloads.
+/// Click selects a scan and shows its date/size in the footer; double-click
+/// downloads it straight to ~/Downloads.
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
@@ -10,12 +11,23 @@ struct ScanGridView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                Button { model.changeServer() } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.plain)
+                .help("Change Server")
+
                 Text(model.hostInput)
                     .font(.headline)
+
                 Spacer()
-                Button("Change Server") { model.changeServer() }
-                Button("Refresh") { Task { await model.connect() } }
-                    .disabled(model.isBusy)
+
+                Button { Task { await model.connect() } } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isBusy)
+                .help("Refresh")
             }
             .padding()
 
@@ -25,19 +37,48 @@ struct ScanGridView: View {
 
             Divider()
 
-            HStack {
-                if model.isBusy {
-                    ProgressView().controlSize(.small)
-                }
-                Spacer()
-                Button("Download (\(model.selected.count))") {
-                    Task { await model.downloadSelected() }
-                }
-                .disabled(model.selected.isEmpty || model.isBusy)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding()
+            footer
         }
+        .overlay(alignment: .top) {
+            if let status = model.statusMessage {
+                Text(status)
+                    .font(.callout)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial, in: Capsule())
+                    .shadow(radius: 4)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.3), value: model.statusMessage)
+    }
+
+    /// Finder-style status bar: shows the clicked scan's date/size, or the
+    /// total scan count when nothing's selected.
+    @ViewBuilder
+    private var footer: some View {
+        HStack {
+            if let scan = model.selectedScan {
+                Text(scan.name)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                if let date = scan.downloadedAt {
+                    Text(date, style: .date)
+                }
+                Text(scan.formattedSize)
+            } else {
+                Text(model.scans.isEmpty ? "" : "\(model.scans.count) scans")
+                Spacer()
+            }
+            if model.isBusy {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .padding()
     }
 
     @ViewBuilder
@@ -98,15 +139,8 @@ private struct ScanThumbnailCell: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(model.selected.contains(scan.id) ? Color.accentColor : Color.clear, lineWidth: 3)
+                        .stroke(model.selectedScanID == scan.id ? Color.accentColor : Color.clear, lineWidth: 3)
                 )
-
-                if model.selected.contains(scan.id) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .blue)
-                        .padding(4)
-                }
             }
             Text(scan.name)
                 .font(.caption)
@@ -114,7 +148,12 @@ private struct ScanThumbnailCell: View {
                 .truncationMode(.middle)
         }
         .contentShape(Rectangle())
-        .onTapGesture { model.toggle(scan) }
+        .help("Double-click to download")
+        // Order matters: SwiftUI resolves the higher tap count first, only
+        // falling back to the single-tap closure once the double-click
+        // window has passed without a second tap.
+        .onTapGesture(count: 2) { Task { await model.download(scan) } }
+        .onTapGesture(count: 1) { model.toggle(scan) }
         .task { image = await model.thumbnail(for: scan) }
     }
 }

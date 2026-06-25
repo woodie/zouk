@@ -23,8 +23,14 @@ public final class AppModel: ObservableObject {
     @Published public var state: ConnectionState = .idle
     @Published public private(set) var hasEverConnected = false
     @Published public var scans: [ScanEntry] = []
-    @Published public var selected: Set<String> = []
+    /// The single scan currently highlighted by a click (Finder-style:
+    /// click to select and show details, double-click to download).
+    @Published public var selectedScanID: String?
     @Published public var isBusy = false
+    /// Brief confirmation text (e.g. "Downloaded 2 files to Downloads.")
+    /// shown after an action completes, so a click has visible proof it
+    /// did something instead of just silently clearing the selection.
+    @Published public var statusMessage: String?
 
     private static let hostKey = "zouk.lastHost"
 
@@ -77,17 +83,20 @@ public final class AppModel: ObservableObject {
         hasEverConnected = false
         state = .idle
         scans = []
-        selected = []
+        selectedScanID = nil
         client = nil
         thumbnailCache.removeAll()
     }
 
+    public var selectedScan: ScanEntry? {
+        guard let selectedScanID else { return nil }
+        return scans.first { $0.id == selectedScanID }
+    }
+
+    /// Single click: select/deselect for the info footer. Clicking the
+    /// already-selected scan again deselects it.
     public func toggle(_ scan: ScanEntry) {
-        if selected.contains(scan.id) {
-            selected.remove(scan.id)
-        } else {
-            selected.insert(scan.id)
-        }
+        selectedScanID = (selectedScanID == scan.id) ? nil : scan.id
     }
 
     public func thumbnail(for scan: ScanEntry) async -> NSImage? {
@@ -104,18 +113,32 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    public func downloadSelected() async {
-        guard let client, !selected.isEmpty else { return }
+    /// Double-click on a thumbnail: download just that one scan. The
+    /// destination filename comes back from ScanClient, which appends
+    /// " (1)", " (2)", etc. (Finder-style) if it's already in Downloads,
+    /// so the confirmation message always names the file that actually
+    /// landed on disk.
+    public func download(_ scan: ScanEntry) async {
+        guard let client else { return }
         isBusy = true
         defer { isBusy = false }
 
-        for scan in scans where selected.contains(scan.id) {
-            do {
-                _ = try await client.download(scan, to: downloadsDirectory, cacheDirectory: cacheDirectory)
-                selected.remove(scan.id)
-            } catch {
-                state = .failed("Lost connection to \(hostInput) while downloading \(scan.name).")
-                return
+        do {
+            let destination = try await client.download(scan, to: downloadsDirectory, cacheDirectory: cacheDirectory)
+            showStatus("Downloaded \(destination.lastPathComponent) to Downloads.")
+        } catch {
+            state = .failed("Lost connection to \(hostInput) while downloading \(scan.name).")
+        }
+    }
+
+    /// Shows `message` and clears it again after a few seconds, unless a
+    /// newer status has already replaced it.
+    private func showStatus(_ message: String) {
+        statusMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if statusMessage == message {
+                statusMessage = nil
             }
         }
     }
