@@ -39,7 +39,8 @@ bundle:
 
 .PHONY: run
 run: bundle
-	open "$(BUNDLE_DIR)"
+	-killall $(PRODUCT_NAME) 2>/dev/null
+	open -n "$(BUNDLE_DIR)"
 
 .PHONY: install
 install: build
@@ -55,6 +56,7 @@ uninstall:
 .PHONY: clean
 clean:
 	$(SWIFT) package clean
+	$(RM) .build
 
 .PHONY: xcode
 xcode:
