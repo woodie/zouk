@@ -14,7 +14,7 @@ struct ScanGridView: View {
                 Button { model.changeServer() } label: {
                     Image(systemName: "pencil")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(CircularIconButtonStyle())
                 .help("Change Server")
 
                 Text(model.hostInput)
@@ -25,7 +25,7 @@ struct ScanGridView: View {
                 Button { Task { await model.connect() } } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(CircularIconButtonStyle())
                 .disabled(model.isBusy)
                 .help("Refresh")
             }
@@ -110,6 +110,20 @@ struct ScanGridView: View {
                 .padding()
             }
         }
+    }
+}
+
+/// Round toolbar button: subtle circle at rest, darker fill while pressed,
+/// so a click has visible feedback instead of a bare floating icon.
+private struct CircularIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .imageScale(.medium)
+            .frame(width: 28, height: 28)
+            .background(
+                Circle().fill(Color.primary.opacity(configuration.isPressed ? 0.22 : 0.09))
+            )
+            .contentShape(Circle())
     }
 }
 
