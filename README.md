@@ -21,7 +21,7 @@ The main screen is similar ro a Samba share but much fater and easier to use.
 
 ## Backend server
 
-Currently, `lambada` doesn't have an HTTP server, so zouk currently uses the
+Currently, `lambada` doesn't have an HTTP server, so zouk uses the
 `scandalous` server json endpoint. Once the client works end-to-end, the plan
 is to build a simple Go service in `lambada` to have a smaller footprint.
 
