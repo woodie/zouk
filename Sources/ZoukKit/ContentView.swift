@@ -18,6 +18,11 @@ public struct ContentView: View {
                 HostEntryView(model: model)
             }
         }
-        .frame(minWidth: 480, minHeight: 360)
+        // Open small like Finder does for a network share with a handful of
+        // items in it -- idealWidth/idealHeight (not just min) is what
+        // .windowResizability(.contentSize) actually uses to size the
+        // window on first launch, so without them the window defaults to
+        // something much larger than the content needs.
+        .frame(minWidth: 360, idealWidth: 420, minHeight: 280, idealHeight: 380)
     }
 }

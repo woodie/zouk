@@ -31,6 +31,11 @@ public final class AppModel: ObservableObject {
     /// shown after an action completes, so a click has visible proof it
     /// did something instead of just silently clearing the selection.
     @Published public var statusMessage: String?
+    /// Set only when a connect attempt fails to reach an otherwise
+    /// well-formed host, so the grid's status bar can show a short
+    /// "Can't reach <host>" instead of repeating that inside the
+    /// centered error message too.
+    @Published public var unreachableHost: String?
 
     private static let hostKey = "zouk.lastHost"
 
@@ -60,7 +65,8 @@ public final class AppModel: ObservableObject {
 
     public func connect() async {
         guard let baseURL = Self.baseURL(fromHostInput: hostInput) else {
-            state = .failed("Enter a hostname or IP address, like scans.netpress.com or 10.0.1.111.")
+            unreachableHost = nil
+            state = .failed("Enter a hostname or IP address, like scans.example.com or 10.0.1.111.")
             return
         }
         state = .connecting
@@ -73,9 +79,11 @@ public final class AppModel: ObservableObject {
             scans = try await client.fetchScans()
             defaults.set(hostInput, forKey: Self.hostKey)
             hasEverConnected = true
+            unreachableHost = nil
             state = .connected
         } catch {
-            state = .failed("Can't reach \(hostInput). Check that it's on the same network and try again.")
+            unreachableHost = hostInput
+            state = .failed("Check that it's on the same network.")
         }
     }
 
@@ -84,6 +92,7 @@ public final class AppModel: ObservableObject {
         state = .idle
         scans = []
         selectedScanID = nil
+        unreachableHost = nil
         client = nil
         thumbnailCache.removeAll()
     }
@@ -127,6 +136,7 @@ public final class AppModel: ObservableObject {
             let destination = try await client.download(scan, to: downloadsDirectory, cacheDirectory: cacheDirectory)
             showStatus("Downloaded \(destination.lastPathComponent) to Downloads.")
         } catch {
+            unreachableHost = nil
             state = .failed("Lost connection to \(hostInput) while downloading \(scan.name).")
         }
     }
@@ -136,7 +146,7 @@ public final class AppModel: ObservableObject {
     private func showStatus(_ message: String) {
         statusMessage = message
         Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(1))
             if statusMessage == message {
                 statusMessage = nil
             }

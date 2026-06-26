@@ -27,4 +27,16 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     public var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
+
+    /// Finder-style relative timestamp ("Today at 4:11 PM", "Yesterday at
+    /// 9:02 AM", or a plain date once it's further back) instead of a bare
+    /// calendar date -- matches how Finder's list view shows Date Modified.
+    public var formattedDate: String? {
+        guard let downloadedAt else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.doesRelativeDateFormatting = true
+        return formatter.string(from: downloadedAt)
+    }
 }

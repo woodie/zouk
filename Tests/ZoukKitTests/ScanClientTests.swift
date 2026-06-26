@@ -7,9 +7,9 @@ final class ScanClientTests: XCTestCase {
     // behaves the way the implementation assumes -- an absolute path
     // replaces the base's whole path, it doesn't get appended to it.
     func testDownloadPathResolvesAgainstBaseAsAbsolutePath() {
-        let base = URL(string: "http://scans.netpress.com")!
+        let base = URL(string: "http://scans.example.com")!
         let resolved = URL(string: "/download/1779907271.pdf", relativeTo: base)?.absoluteURL
-        XCTAssertEqual(resolved?.absoluteString, "http://scans.netpress.com/download/1779907271.pdf")
+        XCTAssertEqual(resolved?.absoluteString, "http://scans.example.com/download/1779907271.pdf")
     }
 
     func testFetchScansURLAppendsToHostWithPort() {

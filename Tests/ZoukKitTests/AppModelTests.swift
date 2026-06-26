@@ -4,15 +4,15 @@ import XCTest
 final class AppModelTests: XCTestCase {
     func testBaseURLAddsSchemeWhenMissing() {
         XCTAssertEqual(
-            AppModel.baseURL(fromHostInput: "scans.netpress.com")?.absoluteString,
-            "http://scans.netpress.com"
+            AppModel.baseURL(fromHostInput: "scans.example.com")?.absoluteString,
+            "http://scans.example.com"
         )
     }
 
     func testBaseURLPreservesExplicitScheme() {
         XCTAssertEqual(
-            AppModel.baseURL(fromHostInput: "https://scans.netpress.com")?.absoluteString,
-            "https://scans.netpress.com"
+            AppModel.baseURL(fromHostInput: "https://scans.example.com")?.absoluteString,
+            "https://scans.example.com"
         )
     }
 

@@ -20,4 +20,19 @@ final class ScanEntryTests: XCTestCase {
         let scan = ScanEntry(name: "a.pdf", size: 1_500_000, time: "2026-06-25T10:30:00-07:00", url: "/download/a.pdf")
         XCTAssertTrue(scan.formattedSize.contains("MB"))
     }
+
+    // formattedDate is locale/relative-day dependent (e.g. "Today at 4:11
+    // PM"), so don't pin down the exact string -- just confirm it tracks
+    // downloadedAt's nil-ness rather than crashing or always returning nil.
+
+    func testFormattedDateIsNonNilForValidTimestamp() {
+        let scan = ScanEntry(name: "a.pdf", size: 7, time: "2026-06-25T10:30:00-07:00", url: "/download/a.pdf")
+        XCTAssertNotNil(scan.formattedDate)
+    }
+
+    func testFormattedDateIsNilForUnparsableTimestamp() {
+        let scan = ScanEntry(name: "a.pdf", size: 7, time: "not-a-date", url: "/download/a.pdf")
+        XCTAssertNil(scan.downloadedAt)
+        XCTAssertNil(scan.formattedDate)
+    }
 }

@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>zouk</string>
     <key>CFBundleIdentifier</key>
-    <string>com.netpress.zouk</string>
+    <string>com.github.woodie.zouk</string>
     <key>CFBundleName</key>
     <string>zouk</string>
     <key>CFBundlePackageType</key>
@@ -16,6 +16,8 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>zouk connects to your scan server on your local network to list and download scans.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>

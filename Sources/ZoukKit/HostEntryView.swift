@@ -16,6 +16,12 @@ struct HostEntryView: View {
             Text("Connect to your scans")
                 .font(.title2)
 
+            Text("macOS may ask for local network permission the first time — if it fails, just try again.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(width: 280)
+
             TextField("Hostname or IP address", text: $model.hostInput)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 280)
