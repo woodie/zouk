@@ -14,7 +14,7 @@ up HTTPS on your internal network is an absolute pain. Finally, serving files
 with Samba works but it can be slow and awkward to use.
 
 Fear not, now we have the Zouk scan retriever. A minimal macOS client for
-browsing and downloading the scans your old scanner/printer relays through
+browsing and downloading scans through
 [lambada](https://github.com/woodie/lambada/) or
 [scandalous](https://github.com/woodie/scandalous).
 The main screen is similar ro a Samba share but much fater and easier to use.
