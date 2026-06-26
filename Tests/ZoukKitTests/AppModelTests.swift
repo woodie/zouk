@@ -58,6 +58,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.scans.isEmpty)
     }
 
+    // The footer can only show one thing at a time: a fresh selection
+    // should take over from a lingering "saved to Downloads" message
+    // left behind by a previous open(_:), not show both.
+
+    @MainActor
+    func testToggleClearsLingeringSavedMessage() {
+        let model = AppModel(defaults: makeEphemeralDefaults(), autoConnect: false)
+        let scan = ScanEntry(name: "1782420815.pdf", size: 7, time: "2026-06-25T10:30:00-07:00", url: "/download/1782420815.pdf")
+        model.scans = [scan]
+        model.savedMessage = "1782420815.pdf saved to Downloads."
+
+        model.toggle(scan)
+
+        XCTAssertNil(model.savedMessage)
+        XCTAssertEqual(model.selectedScanID, scan.id)
+    }
+
     private func makeEphemeralDefaults() -> UserDefaults {
         UserDefaults(suiteName: "zouk.tests.\(UUID().uuidString)")!
     }

@@ -27,10 +27,25 @@ public final class AppModel: ObservableObject {
     /// click to select and show details, double-click to download).
     @Published public var selectedScanID: String?
     @Published public var isBusy = false
-    /// Brief confirmation text (e.g. "Downloaded 2 files to Downloads.")
-    /// shown after an action completes, so a click has visible proof it
-    /// did something instead of just silently clearing the selection.
-    @Published public var statusMessage: String?
+    /// Transient overlay text shown only while `open(_:)` is actively
+    /// saving a file, e.g. "Saving 1782420815.pdf…". Cleared the moment
+    /// that finishes (success or failure) -- it's a quick heads-up
+    /// mid-save, not the confirmation.
+    @Published public var savingMessage: String?
+    /// Persistent footer text confirming the *last* file `open(_:)`
+    /// saved, e.g. "File 1782420815.pdf saved." Deliberately silent on
+    /// *where* -- the destination is whatever the user picked in the
+    /// Save panel, which they just saw and chose themselves, so naming
+    /// it again here isn't useful the way "...saved to Downloads" was
+    /// back when Downloads was the only possible destination. Unlike
+    /// `savingMessage`, this doesn't auto-clear on a timer -- it
+    /// replaces the footer's usual scan-count/selection text and stays
+    /// there until the user selects a scan (`toggle`, which swaps it for
+    /// that scan's stats) or double-clicks another one (`open`, which
+    /// clears it before starting the next save). A capsule that
+    /// vanished after a second was too easy to miss; this sticks around
+    /// until something else clearly needs the footer instead.
+    @Published public var savedMessage: String?
 
     private static let hostKey = "zouk.lastHost"
 
@@ -110,6 +125,7 @@ public final class AppModel: ObservableObject {
         state = .idle
         scans = []
         selectedScanID = nil
+        savedMessage = nil
         client = nil
         thumbnailCache.removeAll()
     }
@@ -120,8 +136,12 @@ public final class AppModel: ObservableObject {
     }
 
     /// Single click: select/deselect for the info footer. Clicking the
-    /// already-selected scan again deselects it.
+    /// already-selected scan again deselects it. Selecting also clears
+    /// any lingering "saved" footer message from a previous open(_:) --
+    /// the footer can only show one thing at a time, and a fresh
+    /// selection is the more useful thing to show.
     public func toggle(_ scan: ScanEntry) {
+        savedMessage = nil
         selectedScanID = (selectedScanID == scan.id) ? nil : scan.id
     }
 
@@ -139,33 +159,79 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Double-click on a thumbnail: download just that one scan. The
-    /// destination filename comes back from ScanClient, which appends
-    /// " (1)", " (2)", etc. (Finder-style) if it's already in Downloads,
-    /// so the confirmation message always names the file that actually
-    /// landed on disk.
-    public func download(_ scan: ScanEntry) async {
+    /// Double-click on a thumbnail: used to download straight to
+    /// ~/Downloads with no prompt, web-browser style, on the theory that
+    /// double-click should "just open it" like a file on a mounted
+    /// network share. In practice the file never stayed in Downloads --
+    /// it always got moved somewhere else right after -- so that silent
+    /// step was friction, not convenience. Now it always shows a native
+    /// Save panel first, pre-filled with `scan.name` and ~/Downloads
+    /// already selected, so confirming with no changes reproduces the
+    /// old one-step behavior exactly, but renaming or picking a
+    /// different folder is just as easy. Selects the scan unconditionally
+    /// before the panel opens, the same as the old right-click/long-press
+    /// Save As did, so cancelling the panel leaves it selected with its
+    /// stats showing rather than clearing the footer for nothing.
+    ///
+    /// Whatever destination comes back from the panel, this still hands
+    /// the saved file to NSWorkspace afterward -- the one part of the
+    /// original "double-click opens it" idea worth keeping no matter
+    /// where the file ends up. The grid's own listing is untouched
+    /// either way: `scan.name` keeps showing whatever the server called
+    /// it, only the local copy gets whatever name and folder the panel
+    /// was given.
+    ///
+    /// The saved copy always keeps the scan's own extension (whatever
+    /// the scanner actually produced -- usually .pdf, but nothing here
+    /// assumes that), even if the user renames the file in the panel and
+    /// drops or changes it. This deliberately isn't done via
+    /// `panel.allowedContentTypes`: on confirm, that just *appends* its
+    /// required extension to whatever's already there instead of
+    /// replacing a mismatched one -- typing "foobar.zip" would become
+    /// "foobar.zip.pdf", not "foobar.pdf". `ExtensionEnforcingPanelDelegate`
+    /// intercepts the same moment and rewrites it properly instead.
+    /// Skipped entirely on the rare scan name with no extension at all
+    /// -- nothing to enforce.
+    ///
+    /// Shows `savingMessage` while the save's in flight, then swaps that
+    /// for the persistent `savedMessage` once the file's on disk and
+    /// handed off to NSWorkspace. No spinner, no animation -- just text,
+    /// and the part that's meant to actually be noticed is the part that
+    /// doesn't disappear on its own.
+    public func open(_ scan: ScanEntry) async {
         guard let client else { return }
+        selectedScanID = scan.id
+        savedMessage = nil
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = scan.name
+        panel.directoryURL = downloadsDirectory
+        panel.canCreateDirectories = true
+        panel.prompt = "Save"
+        panel.message = "Choose where to save \(scan.name)."
+        let originalExtension = (scan.name as NSString).pathExtension
+        // Held here (not just assigned to panel.delegate) because
+        // NSSavePanel.delegate is weak -- without a strong local
+        // reference this would be deallocated before runModal() ever
+        // shows the panel.
+        let extensionDelegate = originalExtension.isEmpty
+            ? nil
+            : ExtensionEnforcingPanelDelegate(requiredExtension: originalExtension)
+        panel.delegate = extensionDelegate
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
         isBusy = true
+        savingMessage = "Saving \(destination.lastPathComponent)…"
         defer { isBusy = false }
 
         do {
-            let destination = try await client.download(scan, to: downloadsDirectory, cacheDirectory: cacheDirectory)
-            showStatus("Downloaded \(destination.lastPathComponent) to Downloads.")
+            try await client.save(scan, to: destination, cacheDirectory: cacheDirectory)
+            NSWorkspace.shared.open(destination)
+            savingMessage = nil
+            savedMessage = "File \(destination.lastPathComponent) saved."
         } catch {
-            state = .failed("Lost connection to \(hostInput) while downloading \(scan.name).")
-        }
-    }
-
-    /// Shows `message` and clears it again after a few seconds, unless a
-    /// newer status has already replaced it.
-    private func showStatus(_ message: String) {
-        statusMessage = message
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            if statusMessage == message {
-                statusMessage = nil
-            }
+            savingMessage = nil
+            state = .failed("Lost connection to \(hostInput) while saving \(scan.name).")
         }
     }
 
@@ -176,5 +242,29 @@ public final class AppModel: ObservableObject {
         guard !trimmed.isEmpty else { return nil }
         let withScheme = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
         return URL(string: withScheme)
+    }
+}
+
+/// Forces whatever filename ends up confirmed in an `NSSavePanel` to
+/// always end in `requiredExtension`, by stripping any extension the
+/// user actually typed (if any) and appending the required one in its
+/// place -- once, never twice. Exists because `NSSavePanel.allowedContentTypes`
+/// doesn't do this on its own: when the typed extension doesn't match,
+/// it appends its required extension to the end rather than replacing
+/// the mismatched one, so "foobar.zip" becomes "foobar.zip.pdf" instead
+/// of "foobar.pdf".
+private final class ExtensionEnforcingPanelDelegate: NSObject, NSOpenSavePanelDelegate {
+    let requiredExtension: String
+
+    init(requiredExtension: String) {
+        self.requiredExtension = requiredExtension
+    }
+
+    func panel(_ sender: Any, userEnteredFilename filename: String, confirmed okFlag: Bool) -> String? {
+        // okFlag is false while the user's still typing (live validation);
+        // only rewrite once they've actually committed to this name.
+        guard okFlag else { return filename }
+        let base = (filename as NSString).deletingPathExtension
+        return "\(base.isEmpty ? filename : base).\(requiredExtension)"
     }
 }

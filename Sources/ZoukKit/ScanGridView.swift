@@ -3,7 +3,19 @@ import SwiftUI
 
 /// Finder/Samba-share-style icon grid: PDF thumbnail above, filename below.
 /// Click selects a scan and shows its date/size in the footer; double-click
-/// downloads it straight to ~/Downloads.
+/// selects it and opens a native Save panel -- pre-filled with the scan's
+/// name and ~/Downloads already selected, so confirming as-is reproduces
+/// the old "just go to Downloads" behavior, but renaming or picking a
+/// different folder is just as easy -- then hands the saved file to
+/// whatever app handles PDFs, the same way double-clicking a file on a
+/// mounted network share would open it. While the save is in flight, a
+/// plain text capsule reads "Saving …" (no spinner, no animation); once
+/// it lands, the footer itself reads "File … saved." and stays that way
+/// -- replacing the usual scan-count/selection text -- until a new
+/// selection or another save needs the footer for something else. That
+/// persistence is the point: a capsule that vanishes on its own timer is
+/// too easy to miss, especially for someone expecting Finder/Samba-share
+/// behavior.
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
@@ -42,8 +54,8 @@ struct ScanGridView: View {
             footer
         }
         .overlay {
-            if let status = model.statusMessage {
-                Text(status)
+            if let saving = model.savingMessage {
+                Text(saving)
                     .font(.callout)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -52,20 +64,25 @@ struct ScanGridView: View {
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.3), value: model.statusMessage)
+        .animation(.spring(duration: 0.3), value: model.savingMessage)
     }
 
-    /// Finder-style status bar: shows the clicked scan's date and size --
-    /// the scan's own filename is server-generated and never meaningful, so
-    /// it doesn't belong here -- or the total scan count when nothing's
-    /// selected. Centered either way. (A failed reload bounces back to
-    /// HostEntryView instead of landing here, so there's no "can't reach
-    /// host" case to show in this footer.)
+    /// Finder-style status bar. Priority, highest first: `savedMessage`
+    /// (the persistent "File ... saved." confirmation from the most
+    /// recent open(_:), if nothing's cleared it since); else the
+    /// clicked scan's date and size -- the scan's own filename is
+    /// server-generated and never meaningful, so it doesn't belong here;
+    /// else the total scan count when nothing's selected. Centered
+    /// either way. (A failed reload bounces back to HostEntryView
+    /// instead of landing here, so there's no "can't reach host" case to
+    /// show in this footer.)
     @ViewBuilder
     private var footer: some View {
         HStack {
             Spacer()
-            if let scan = model.selectedScan {
+            if let saved = model.savedMessage {
+                Text(saved)
+            } else if let scan = model.selectedScan {
                 if let date = scan.formattedDate {
                     Text(date)
                 }
@@ -74,9 +91,6 @@ struct ScanGridView: View {
                 Text(model.scans.isEmpty ? "" : "\(model.scans.count) scans")
             }
             Spacer()
-            if model.isBusy {
-                ProgressView().controlSize(.small)
-            }
         }
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -263,12 +277,19 @@ private struct ScanThumbnailCell: View {
                 .background(isSelected ? selectionTint : .clear, in: RoundedRectangle(cornerRadius: 4))
         }
         .contentShape(Rectangle())
-        .help("Double-click to download")
-        // Order matters: SwiftUI resolves the higher tap count first, only
-        // falling back to the single-tap closure once the double-click
-        // window has passed without a second tap.
-        .onTapGesture(count: 2) { Task { await model.download(scan) } }
-        .onTapGesture(count: 1) { model.toggle(scan) }
+        .help("Double-click to choose where to save, then open it.")
+        // Explicit precedence with exclusively(before:) rather than two
+        // independent onTapGesture modifiers: double only wins if a
+        // second tap lands before the single-tap window closes,
+        // otherwise it falls through to select/deselect.
+        .gesture(
+            TapGesture(count: 2)
+                .onEnded { Task { await model.open(scan) } }
+                .exclusively(
+                    before: TapGesture(count: 1)
+                        .onEnded { model.toggle(scan) }
+                )
+        )
         .task { image = await model.thumbnail(for: scan) }
     }
 }

@@ -101,6 +101,75 @@ so these choices are deliberate, not arbitrary:
   itself (`ConnectionState.failed`'s string) intentionally does *not*
   also say "try again" anymore, to avoid repeating that across both
   lines.
+- **Double-click behavior**: selects the scan, then always shows a native
+  `NSSavePanel` (`AppModel.open(_:)`) pre-filled with `scan.name` and
+  `panel.directoryURL` set to `~/Downloads` -- confirming as-is reproduces
+  the old silent "just go to Downloads" behavior exactly, but renaming or
+  picking a different folder is just as easy. Whatever destination comes
+  back, `ScanClient.save(_:to:cacheDirectory:)` copies the cached file
+  there (overwriting if it already exists -- the panel's own "replace
+  this file?" alert already asked), then `NSWorkspace.shared.open(destination)`
+  opens it. Cancelling the panel leaves the scan selected and does
+  nothing else -- no save, no open. The saved file always keeps
+  `scan.name`'s own extension (not a hardcoded ".pdf" -- scanners that
+  hand back e.g. ".jpg" are covered the same way), enforced via
+  `ExtensionEnforcingPanelDelegate` rather than `panel.allowedContentTypes`:
+  that property's own auto-correction *appends* its required extension
+  to a mismatched one instead of replacing it (typing "foobar.zip" would
+  save as "foobar.zip.pdf", not "foobar.pdf"), so this delegate
+  intercepts `panel(_:userEnteredFilename:confirmed:)` directly and
+  rewrites the name itself -- strip whatever's there, append the
+  original extension, once. Skipped when the scan name has no extension
+  at all, since there'd be nothing to enforce. The delegate instance is
+  held in a local `let` for the duration of `runModal()`, since
+  `NSSavePanel.delegate` is a weak reference.
+
+  This replaced an earlier two-gesture design: double-click silently
+  downloaded straight to Downloads (added from real feedback -- an adult
+  son kept double-clicking scans expecting them to open, not just
+  download), and a separate right-click/long-press gesture popped the
+  Save panel but skipped opening the file afterward. Merged into one
+  gesture per later feedback: the user always moved saved scans
+  elsewhere anyway, so silently dumping into Downloads was friction, not
+  convenience -- the panel removes that extra manual move step, and
+  opening the file afterward was explicitly called out as worth keeping
+  regardless of where the picker pointed. Right-click/long-press and the
+  `RightClickCatcher` AppKit bridge were removed outright rather than
+  kept as a redundant duplicate trigger.
+- **No busy indicator while opening**: tried a `RunningDogView` overlay
+  (`ScanGridView.OpeningScanOverlay`) plus a minimum-duration pad
+  (`AppModel.openingScanName`/`waitOutMinimum`) so it wouldn't flash by
+  too fast to see, but the user asked to drop both rather than fix them
+  up. `RunningDogView` itself is untouched and still only appears in
+  `ConnectingView`.
+- **Saving/saved messaging**: `open(_:)` selects the scan and clears any
+  leftover `savedMessage` up front, then -- once the panel resolves --
+  shows `AppModel.savingMessage` ("Saving `<name>`…") in the same
+  text-only capsule overlay the old "Opened ..." status used, then swaps
+  that for `AppModel.savedMessage` ("File `<name>` saved.") once the
+  file's on disk and handed to NSWorkspace. The footer text deliberately
+  doesn't name the destination anymore -- it used to say "...saved to
+  Downloads" back when Downloads was the only possible destination, but
+  now the user just picked the destination themselves in the panel, so
+  repeating it back isn't useful. `savedMessage` isn't on a timer -- it
+  takes over the footer (ahead of the selected-scan stats/scan-count
+  text `ScanGridView.footer` normally shows) and stays there until
+  `toggle(_:)` (a new selection) or another `open(_:)` clears it.
+  Replaced an earlier version of this same idea that used a
+  `RunningDogView`/spinner overlay during the save -- the user wanted
+  the save itself silent and the confirmation to be what's hard to
+  miss, not the wait.
+- **Single gesture, no context menu**: only single-click (select) and
+  double-click (`open(_:)`) remain on `ScanThumbnailCell`, given
+  explicit precedence with `TapGesture(count: 2).exclusively(before:
+  TapGesture(count: 1))` rather than two independent `onTapGesture`
+  modifiers. A right-click/long-press variant of the Save panel
+  (`AppModel.saveAs(_:)`, plus a `ScanGridView.RightClickCatcher`
+  AppKit bridge for secondary-click) existed briefly but was removed
+  once double-click absorbed the same panel-then-open behavior --
+  keeping it around afterward would've just been a second gesture for
+  the identical action, which cuts against the "simplify" framing that
+  prompted the merge in the first place.
 
 ## macOS quirks worth knowing before debugging "it doesn't connect"
 

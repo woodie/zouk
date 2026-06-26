@@ -21,10 +21,10 @@ A minimal macOS client for browsing and downloading scans through
 [scandalous](https://github.com/woodie/scandalous).
 The main screen is similar ro a Samba share but much fater and easier to use.
 
-## Backend server
+## Backend servers
 
-Currently, `lambada` doesn't have an HTTP server, so zouk uses the
-`scandalous` server json endpoint.
+Both `lambada` and `scandalous` web services support zouk.
+One it witten in Go, the other in Ruby.
 
 ## Using it
 
@@ -32,7 +32,15 @@ On launch, zouk asks for a hostname or IP address (e.g.
 `10.0.1.111`) and remembers it for next time.
 If the server can't be reached, it shows an inline error and lets you
 retry or change the server. Once connected, click a thumbnail to see its
-date and size in the footer, and double-click to download it.
+date and size in the footer, and double-click to save it -- a native
+Save panel opens with the scan's name and `~/Downloads` already
+selected, so confirming as-is saves it there just like before, but
+renaming it or picking a different folder is just as easy. Either way,
+once it's saved it opens in whatever app handles PDFs, the same as
+double-clicking a file on a mounted network share. While it saves
+you'll see a brief "Saving…" note, and once it's done the footer reads
+"File … saved." and stays that way until you click something else, so
+it's hard to miss.
 
 Run `make run` rather than `swift run` directly -- it assembles a minimal
 `zouk.app` and launches it with `open`, so macOS activates it like a

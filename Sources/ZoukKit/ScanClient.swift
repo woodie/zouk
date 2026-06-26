@@ -55,28 +55,19 @@ public actor ScanClient {
         return local
     }
 
-    public func download(_ scan: ScanEntry, to destinationDirectory: URL, cacheDirectory: URL) async throws -> URL {
+    /// Copies the (possibly already-cached) file straight to
+    /// `destination`, whatever name and folder the caller chose for it --
+    /// in practice, an NSSavePanel the caller already ran. No Finder-style
+    /// de-dup naming here: the panel already resolved any "replace this
+    /// file?" question before this is ever called, so this just writes
+    /// to exactly the URL it's given.
+    public func save(_ scan: ScanEntry, to destination: URL, cacheDirectory: URL) async throws -> URL {
         let cached = try await cachedFile(for: scan, in: cacheDirectory)
-        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
-        let destination = Self.uniqueDestination(for: scan.name, in: destinationDirectory)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
         try FileManager.default.copyItem(at: cached, to: destination)
         return destination
-    }
-
-    /// Finder-style de-duplication: downloading "scan.pdf" a second time
-    /// produces "scan (1).pdf", then "scan (2).pdf", and so on, instead of
-    /// silently overwriting the file already in Downloads.
-    nonisolated static func uniqueDestination(for filename: String, in directory: URL) -> URL {
-        let base = (filename as NSString).deletingPathExtension
-        let fileExtension = (filename as NSString).pathExtension
-        var candidate = directory.appendingPathComponent(filename)
-        var counter = 1
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            let suffixed = fileExtension.isEmpty ? "\(base) (\(counter))" : "\(base) (\(counter)).\(fileExtension)"
-            candidate = directory.appendingPathComponent(suffixed)
-            counter += 1
-        }
-        return candidate
     }
 
     private static func checkOK(_ response: URLResponse) throws {
