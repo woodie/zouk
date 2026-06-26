@@ -33,3 +33,10 @@ jobs:
 
       - name: Test
         run: make test
+
+      - name: Bundle
+        # Exercises the .app-assembly path (make run uses this too) that
+        # `make build`/`make test` never touch. This is what would have
+        # caught the missing zouk_ZoukKit.bundle regression (see docs/
+        # COWORK.md's "Packaging gotcha" note) before it shipped in v1.1.
+        run: make bundle

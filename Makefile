@@ -38,13 +38,44 @@ lint:
 # the normal way, so macOS activates it like any other Mac app.
 .PHONY: bundle
 bundle:
-	$(SWIFT) build
-	$(eval BUILD_DIRECTORY := $(shell $(SWIFT) build --show-bin-path))
+	$(SWIFT) build $(SWIFT_BUILD_FLAGS)
+	$(eval BUILD_DIRECTORY := $(shell $(SWIFT) build --show-bin-path $(SWIFT_BUILD_FLAGS)))
 	$(MKDIR) "$(BUNDLE_DIR)/Contents/MacOS"
 	$(MKDIR) "$(BUNDLE_DIR)/Contents/Resources"
 	$(CP) "$(BUILD_DIRECTORY)/$(PRODUCT_NAME)" "$(BUNDLE_DIR)/Contents/MacOS/$(PRODUCT_NAME)"
 	$(CP) Resources/Info.plist "$(BUNDLE_DIR)/Contents/Info.plist"
 	$(CP) Resources/AppIcon.icns "$(BUNDLE_DIR)/Contents/Resources/AppIcon.icns"
+	# Any SwiftPM target with a `resources:` entry (e.g. ZoukKit) makes
+	# swift build emit a *.bundle next to the binary in BUILD_DIRECTORY.
+	# The generated Bundle.module accessor's primary lookup path is built
+	# from Bundle.main.bundleURL, which for a macOS .app is the bundle's
+	# TOP LEVEL (e.g. zouk.app/), not Contents/Resources -- that's the
+	# separate resourceURL property, which this accessor never checks. So
+	# the bundle has to land at the app's top level to actually be found;
+	# copying it into Contents/Resources only (the first attempt at this
+	# fix) looks right by macOS convention but doesn't match what the
+	# accessor checks, and silently keeps shipping a build that
+	# fatalErrors on any machine without the dev's exact .build path. We
+	# copy to both locations: top level because the current accessor's
+	# primary path depends on it, Contents/Resources for convention and
+	# in case a future SwiftPM regenerates the accessor to check
+	# resourceURL instead. See docs/COWORK.md's "Packaging gotcha" note.
+	@for b in "$(BUILD_DIRECTORY)"/*.bundle; do \
+		test -e "$$b" || continue; \
+		name=$$(basename "$$b"); \
+		$(RM) "$(BUNDLE_DIR)/$$name"; \
+		$(CP) -R "$$b" "$(BUNDLE_DIR)/$$name"; \
+		$(RM) "$(BUNDLE_DIR)/Contents/Resources/$$name"; \
+		$(CP) -R "$$b" "$(BUNDLE_DIR)/Contents/Resources/$$name"; \
+	done
+	@for b in "$(BUILD_DIRECTORY)"/*.bundle; do \
+		test -e "$$b" || continue; \
+		name=$$(basename "$$b"); \
+		test -d "$(BUNDLE_DIR)/$$name" || { \
+			echo "error: $$name missing from $(BUNDLE_DIR) top level -- Bundle.module's primary lookup (Bundle.main.bundleURL) will fatalError at runtime without this"; \
+			exit 1; \
+		}; \
+	done
 
 .PHONY: run
 run: bundle

@@ -123,6 +123,58 @@ so these choices are deliberate, not arbitrary:
   gone). Full notarization is a separate, optional, paid path -- not
   needed here. Details in `docs/DELIVERY.md`.
 
+## Packaging gotcha: SwiftPM resource bundles + `Bundle.module`
+
+- `ZoukKit`'s `resources: [.process("Resources")]` (`Package.swift`) makes
+  `swift build` emit a `zouk_ZoukKit.bundle` next to the binary, plus a
+  generated `Bundle.module` accessor
+  (`.build/<triple>/<config>/ZoukKit.build/DerivedSources/resource_bundle_accessor.swift`)
+  that looks for it in exactly two places: `<app>.app/zouk_ZoukKit.bundle`
+  -- the bundle's *top level*, via `Bundle.main.bundleURL` -- or a
+  fallback hardcoded to the *absolute* `.build` path on whichever machine
+  compiled it. Note this is **not** `Contents/Resources`: that's the
+  separate `resourceURL` property, and this generated accessor never
+  checks it, despite that being the conventional macOS location for
+  bundled resources. `AppIcon.nsImage` (`AppIconImage.swift`) and the
+  running-dog GIF (`RunningDogView.swift`) both go through `Bundle.module`.
+- v1.1 added that code (commit `0d1cb45`) without updating `make bundle`'s
+  Resources-copying step to also copy the new `.bundle` -- so the
+  assembled `.app` only "worked" on the dev machine that built it, since
+  the hardcoded `.build` fallback happened to still resolve there. Moving
+  the same `.app` to a Mac that never built the project (no matching
+  `.build` at that exact path) crashed instantly on launch with
+  `EXC_BREAKPOINT` / `_assertionFailure` deep in `NSBundle.module`'s lazy
+  initializer. v1.0.0 never hit this -- it predates any `Bundle.module`
+  use entirely.
+- First fix attempt had `make bundle` copy `*.bundle` into
+  `Contents/Resources` only -- the conventional location, and what this
+  doc used to (incorrectly) claim `Bundle.module` checked. Confirmed
+  wrong empirically, not just by re-reading the generated source: `find`
+  on the family Mac showed the bundle present and intact at
+  `Contents/Resources/zouk_ZoukKit.bundle`, and the very next launch
+  still fatalError'd in `Bundle.module` (`docs/crash_4.txt`, two crash
+  reports after the original `Contents/Resources`-only fix). `make
+  bundle` now copies `*.bundle` to both the `.app`'s top level (what the
+  current accessor's primary lookup actually depends on) and
+  `Contents/Resources` (for convention, and in case a future SwiftPM
+  regenerates the accessor to check `resourceURL` instead), and verifies
+  the top-level copy landed.
+- CI now runs `make bundle` too (see `.github/workflows/CI.yml`), so a
+  regression here fails the build immediately instead of only surfacing
+  on someone's fresh Mac. CI can't catch *this specific* mistake though --
+  it only checks that the directory exists, not that it's at the path
+  `Bundle.module` actually reads from, which is exactly how the first fix
+  passed CI and still crashed on a real machine.
+- Separately, `bundle`'s own `swift build` call never passed
+  `$(SWIFT_BUILD_FLAGS)` (`--configuration release`), unlike `build` and
+  `install` -- so `make bundle` and `make run` (which depends on it)
+  silently assembled a **debug** `.app` the entire time, despite
+  `docs/DELIVERY.md` already (correctly) documenting `make bundle` as a
+  release build. Caught by running `make bundle` directly and noticing
+  `swift build`'s own "Building for debugging..." line. Fixed by passing
+  `$(SWIFT_BUILD_FLAGS)` to both the build call and the
+  `--show-bin-path` lookup, matching how `install` already did it.
+
 ## Build/test/run
 
 ```
