@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the ref (stable per branch/PR), not run_id (unique per run) --
+  # so a new push to the same branch cancels any older run still
+  # queued/running instead of letting a slow runner for an already-superseded
+  # commit clobber the badge with a stale result.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # zouk is a SwiftUI macOS app with no Linux/iOS target -- see
+    # docs/COWORK.md's sandbox note. macos-latest ships Xcode + Swift
+    # preinstalled, and the unit tests are plain XCTest (no UI tests), so
+    # no simulator boot is needed.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test

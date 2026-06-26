@@ -1,11 +1,16 @@
 # zouk
 
+[![Swift](https://img.shields.io/badge/swift-5.9%2B-F05138.svg)](Package.swift)
+[![CI](https://github.com/woodie/zouk/actions/workflows/CI.yml/badge.svg)](https://github.com/woodie/zouk/actions/workflows/CI.yml)
+[![Release](https://img.shields.io/github/v/release/woodie/zouk.svg)](https://github.com/woodie/zouk/releases/latest)
+[![License](https://img.shields.io/github/license/woodie/zouk.svg)](LICENSE)
+
+![zouk's scan grid, showing two real scans](docs/window.png)
+
 A minimal macOS client for browsing and downloading the scans your old
 scanner/printer relays through `lambada` (and, before that, `scandalous`).
 The main screen looks like a Samba share: a Finder-style grid of PDF
 thumbnails you click to select and double-click to download.
-
-![zouk's scan grid, showing two real scans](docs/window.png)
 
 ## Status: stopgap backend
 
@@ -65,3 +70,5 @@ swift test       # or: make test
   and the URL-resolution logic the download path relies on.
 - `docs/DELIVERY.md` -- how to cut and hand off a build.
 - `docs/COWORK.md` -- context for picking this project back up cold.
+- `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS for
+  every push/PR to `main`.
