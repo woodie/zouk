@@ -8,10 +8,10 @@
 ![zouk's scan grid, showing two real scans](docs/window.png)
 
 This project was created because we now have tools to get files from an old
-scanner (that requires and open relay) but downloading files over HTTP can be
-a drag (with steps to keep unsafe documents off your computer) and setting
-up HTTPS on your internal network is an absolute pain. Finally, serving files
-with Samba works but it can be slow and awkward to use.
+scanner (that requires and open relay) but downloading files over HTTP with a
+web browser can be a drag (with steps to keep unsafe documents off your computer)
+and setting up HTTPS on your internal network is an absolute pain. Finally,
+serving files with Samba works but it can be slow and awkward to use.
 
 Fear not, now we have the Zouk scan retriever. A minimal macOS client for
 browsing and downloading scans through
