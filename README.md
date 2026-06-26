@@ -1,4 +1,4 @@
-# zouk
+# Zouk scan retriever
 
 [![Swift](https://img.shields.io/badge/swift-5.9%2B-F05138.svg)](Package.swift)
 [![CI](https://github.com/woodie/zouk/actions/workflows/CI.yml/badge.svg)](https://github.com/woodie/zouk/actions/workflows/CI.yml)
