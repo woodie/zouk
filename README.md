@@ -13,6 +13,7 @@ web browser can be a drag (with steps to keep unsafe documents off your computer
 and setting up HTTPS on your internal network is an absolute pain. Finally,
 serving files with Samba works but it can be slow and awkward to use.
 
+<img style="padding-left: 10px" align="right" width="64" src="docs/art_smaller.png">
 Fear not, now we have the Zouk scan retriever. A minimal macOS client for
 browsing and downloading scans through
 [lambada](https://github.com/woodie/lambada/) or
