@@ -8,7 +8,7 @@ struct ZoukApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("Zouk Scan Retriever") {
+        WindowGroup("Zouk scan retriever") {
             ContentView()
         }
         .windowResizability(.contentSize)
@@ -19,9 +19,9 @@ struct ZoukApp: App {
             // and a copyright credits line -- no separate custom About
             // window/sheet to build or maintain.
             CommandGroup(replacing: .appInfo) {
-                Button("About Zouk Scan Retriever") {
+                Button("About Zouk scan retriever") {
                     NSApplication.shared.orderFrontStandardAboutPanel(options: [
-                        .applicationName: "Zouk Scan Retriever",
+                        .applicationName: "Zouk scan retriever",
                         .credits: NSAttributedString(
                             string: "© \(currentYear) John Woodell",
                             attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]

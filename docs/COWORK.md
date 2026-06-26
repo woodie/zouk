@@ -1,6 +1,6 @@
 # Picking up zouk in a new Cowork session
 
-Context for whoever (human or Claude) opens this repo cold, with none of
+Context for whoever opens this repo cold, with none of
 the prior conversation history.
 
 ## What this is
