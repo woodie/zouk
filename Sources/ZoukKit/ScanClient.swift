@@ -61,6 +61,7 @@ public actor ScanClient {
     /// de-dup naming here: the panel already resolved any "replace this
     /// file?" question before this is ever called, so this just writes
     /// to exactly the URL it's given.
+    @discardableResult
     public func save(_ scan: ScanEntry, to destination: URL, cacheDirectory: URL) async throws -> URL {
         let cached = try await cachedFile(for: scan, in: cacheDirectory)
         if FileManager.default.fileExists(atPath: destination.path) {
