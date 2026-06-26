@@ -8,7 +8,7 @@
 ![zouk's scan grid, showing two real scans](docs/window.png)
 
 This project was created because we now have tools to get files from an old
-scanner that requires and open relay but downloading files over HTTP can be
+scanner (that requires and open relay) but downloading files over HTTP can be
 a drag (with steps to keep unsafe documents off your computer) and setting
 up HTTPS on your internal network is an absolute pain. Finally, serving files
 with Samba works but it can be slow and awkward to use.
@@ -22,20 +22,15 @@ The main screen is similar ro a Samba share but much fater and easier to use.
 ## Backend server
 
 Currently, `lambada` doesn't have an HTTP server, so zouk uses the
-`scandalous` server json endpoint. Once the client works end-to-end, the plan
-is to build a simple Go service in `lambada` to have a smaller footprint.
+`scandalous` server json endpoint.
 
 ## Using it
 
 On launch, zouk asks for a hostname or IP address (e.g.
-`scans.example.com` or `10.0.1.111:8080`) and remembers it for next time.
+`10.0.1.111`) and remembers it for next time.
 If the server can't be reached, it shows an inline error and lets you
 retry or change the server. Once connected, click a thumbnail to see its
-date and size in the footer, and double-click to download it to
-`~/Downloads` (repeat downloads get Finder-style " (1)", " (2)" suffixes
-instead of overwriting). The address bar at the top is editable directly
-(type a new host and press Enter to reconnect); the reload icon
-re-fetches the list.
+date and size in the footer, and double-click to download it.
 
 Run `make run` rather than `swift run` directly -- it assembles a minimal
 `zouk.app` and launches it with `open`, so macOS activates it like a
