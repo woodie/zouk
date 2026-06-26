@@ -7,30 +7,23 @@
 
 ![zouk's scan grid, showing two real scans](docs/window.png)
 
-A minimal macOS client for browsing and downloading the scans your old
-scanner/printer relays through `lambada` (and, before that, `scandalous`).
-The main screen looks like a Samba share: a Finder-style grid of PDF
-thumbnails you click to select and double-click to download.
+This project was created because we now have tools to get files from an old
+scanner that requires and open relay but downloading files over HTTP can be
+a drag (with steps to keep unsafe documents off your computer) and setting
+up HTTPS on your internal network is an absolute pain. Finally, serving files
+with Samba works but it can be slow and awkward to use.
 
-## Status: stopgap backend
+Fear not, now we have the Zouk scan retriever. A minimal macOS client for
+browsing and downloading the scans your old scanner/printer relays through
+[lambada](https://github.com/woodie/lambada/) or
+[scandalous](https://github.com/woodie/scandalous).
+The main screen is similar ro a Samba share but much fater and easier to use.
 
-`lambada` doesn't have an HTTP server yet, so zouk currently points at
-`scandalous`'s `GET /scans.json` endpoint -- a small JSON API added
-specifically as a stopgap so the family can keep pulling scans while zouk
-gets built. See `scandalous/docs/adr/0001-remote-family-access.md` for the
-full reasoning. Once the client works end-to-end, the plan is to build a
-proper Go service in `lambada` to replace `scandalous`'s WEB component,
-and point zouk at that instead.
+## Backend server
 
-The API contract zouk expects from either backend:
-
-```
-GET /scans.json
-[{ "name": "1779907271.pdf", "size": 7, "time": "<ISO8601>", "url": "/download/1779907271.pdf" }, ...]
-
-GET /download/:filename
-<the PDF bytes>
-```
+Currently, `lambada` doesn't have an HTTP server, so zouk currently uses the
+`scandalous` server json endpoint. Once the client works end-to-end, the plan
+is to build a simple Go service in `lambada` to have a smaller footprint.
 
 ## Using it
 

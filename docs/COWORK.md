@@ -28,14 +28,29 @@ Makefile target.
 
 ## Current state
 
-- No tags exist yet; v0.1.0 hasn't been cut. See `docs/DELIVERY.md` for
-  the release/distribution checklist and Gatekeeper notes for handing a
-  build to a family member without Xcode.
+- **v1.0.0 is tagged** and CI is green on `main` (GitHub Actions, macOS
+  runner, `make build` + `make test`). MIT licensed. README has the
+  badge row (Swift/CI/Release/License) plus a real screenshot
+  (`docs/window.png`) of the app showing actual scans.
+- The release notes used for v1.0.0 on GitHub: first-tagged-release
+  bullets covering the Finder-style grid, address-bar host entry, local
+  network permission handling, Finder-style download de-dup naming, and
+  CI/license. No changelog needed yet -- nothing prior to diff against.
+- See `docs/DELIVERY.md` for the release/distribution checklist and
+  Gatekeeper notes for handing a build to a family member without Xcode.
 - `git status` typically has uncommitted changes after a design pass --
   check before assuming HEAD reflects the latest UI.
 - Task #16 on the standing task list (convert `Tests/ZoukKitTests` to
   Quick/Nimble `describe/context/it` style) is still pending and unrelated
   to recent UI work -- pick it up independently if asked.
+
+## Next up (per the user, not yet written)
+
+- README: a line about *why* zouk exists -- downloading files over HTTP
+  in a browser is a drag, which is the actual motivation.
+- README: a line on *who this is for* -- anyone with an old scanner that
+  needs an open relay (i.e. exactly the `scandalous`/`lambada` situation
+  this repo was built around, generalized).
 
 ## Design conventions established so far (don't regress on these)
 
@@ -87,6 +102,27 @@ so these choices are deliberate, not arbitrary:
   also say "try again" anymore, to avoid repeating that across both
   lines.
 
+## macOS quirks worth knowing before debugging "it doesn't connect"
+
+- **Local Network Privacy**: the *first* request to a private/LAN IP
+  triggers a system "Allow 'zouk' to find devices on local networks?"
+  dialog. The in-flight request usually fails/times out while that
+  dialog is pending, regardless of which button gets pressed -- this
+  looks like a bug but isn't one. Retrying after the permission is
+  granted works. `Info.plist` now sets `NSLocalNetworkUsageDescription`
+  so the dialog shows zouk-specific text instead of Apple's generic
+  boilerplate.
+- **Gatekeeper / signing** (for handing a build to a family member
+  without Xcode): Apple Silicon binaries get an automatic ad-hoc
+  signature from the linker, which is enough to run -- no paid Developer
+  ID account or Xcode signing needed for one-off distribution. The
+  quarantine flag only gets attached by quarantine-aware transfer
+  methods (AirDrop, Mail, browser download), not USB/local-network copy
+  or `scp`. On current macOS, the override path is System Settings →
+  Privacy & Security → "Open Anyway" (the old right-click bypass is
+  gone). Full notarization is a separate, optional, paid path -- not
+  needed here. Details in `docs/DELIVERY.md`.
+
 ## Build/test/run
 
 ```
@@ -110,3 +146,6 @@ make xcode     # open Package.swift in Xcode directly
   decoding, formatted date/size, and download-path URL resolution.
 - `docs/DELIVERY.md` -- how to cut and hand off a build.
 - `docs/COWORK.md` -- this file.
+- `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS
+  for every push/PR to `main`.
+- `LICENSE` -- MIT.
