@@ -58,14 +58,14 @@ struct ScanGridView: View {
     /// Finder-style status bar: shows the clicked scan's date and size --
     /// the scan's own filename is server-generated and never meaningful, so
     /// it doesn't belong here -- or the total scan count when nothing's
-    /// selected. Centered either way.
+    /// selected. Centered either way. (A failed reload bounces back to
+    /// HostEntryView instead of landing here, so there's no "can't reach
+    /// host" case to show in this footer.)
     @ViewBuilder
     private var footer: some View {
         HStack {
             Spacer()
-            if let host = model.unreachableHost {
-                Text("Can't reach \(host)")
-            } else if let scan = model.selectedScan {
+            if let scan = model.selectedScan {
                 if let date = scan.formattedDate {
                     Text(date)
                 }
@@ -80,7 +80,8 @@ struct ScanGridView: View {
         }
         .font(.callout)
         .foregroundStyle(.secondary)
-        .padding()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -118,8 +119,8 @@ struct ScanGridView: View {
     }
 }
 
-/// Circular icon-only toolbar button (e.g. the address bar's reload
-/// button), subtle fill at rest, darker while pressed.
+/// Circular icon-only toolbar button (the address bar's reload button),
+/// subtle fill at rest, darker while pressed.
 private struct CircularIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -158,17 +159,26 @@ private struct DogEaredDocumentIcon: View {
         var corner: CGFloat = 0
 
         func path(in rect: CGRect) -> Path {
-            let w = rect.width, h = rect.height
+            let width = rect.width, height = rect.height
             var path = Path()
             path.move(to: CGPoint(x: corner, y: 0))
-            path.addLine(to: CGPoint(x: w - fold, y: 0))
-            path.addLine(to: CGPoint(x: w, y: fold))
-            path.addLine(to: CGPoint(x: w, y: h - corner))
-            path.addArc(center: CGPoint(x: w - corner, y: h - corner), radius: corner, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-            path.addLine(to: CGPoint(x: corner, y: h))
-            path.addArc(center: CGPoint(x: corner, y: h - corner), radius: corner, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            path.addLine(to: CGPoint(x: width - fold, y: 0))
+            path.addLine(to: CGPoint(x: width, y: fold))
+            path.addLine(to: CGPoint(x: width, y: height - corner))
+            path.addArc(
+                center: CGPoint(x: width - corner, y: height - corner), radius: corner,
+                startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false
+            )
+            path.addLine(to: CGPoint(x: corner, y: height))
+            path.addArc(
+                center: CGPoint(x: corner, y: height - corner), radius: corner,
+                startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false
+            )
             path.addLine(to: CGPoint(x: 0, y: corner))
-            path.addArc(center: CGPoint(x: corner, y: corner), radius: corner, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            path.addArc(
+                center: CGPoint(x: corner, y: corner), radius: corner,
+                startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false
+            )
             path.closeSubpath()
             return path
         }
@@ -180,11 +190,11 @@ private struct DogEaredDocumentIcon: View {
         var fold: CGFloat = 20
 
         func path(in rect: CGRect) -> Path {
-            let w = rect.width
+            let width = rect.width
             var path = Path()
-            path.move(to: CGPoint(x: w - fold, y: 0))
-            path.addLine(to: CGPoint(x: w, y: fold))
-            path.addLine(to: CGPoint(x: w - fold, y: fold))
+            path.move(to: CGPoint(x: width - fold, y: 0))
+            path.addLine(to: CGPoint(x: width, y: fold))
+            path.addLine(to: CGPoint(x: width - fold, y: fold))
             path.closeSubpath()
             return path
         }

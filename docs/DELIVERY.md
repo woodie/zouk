@@ -64,6 +64,6 @@ family installs -- overkill for v0.1.0.
 - [ ] Commit and push all changes (`git status` should be clean).
 - [ ] `make build && make test` pass on macOS.
 - [ ] `make bundle`, smoke-test the resulting `.app` locally.
-- [ ] Tag the release (no tags exist yet -- `v0.1.0` would be the first).
+- [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style).
 - [ ] Hand off the `.app` and, if the recipient hits Gatekeeper, point
       them at the "Getting past Gatekeeper" steps above.

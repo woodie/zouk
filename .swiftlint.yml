@@ -1,0 +1,5 @@
+included:
+  - Sources
+
+disabled_rules:
+  - static_over_final_class

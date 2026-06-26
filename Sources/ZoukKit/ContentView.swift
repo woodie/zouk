@@ -12,7 +12,14 @@ public struct ContentView: View {
 
     public var body: some View {
         Group {
-            if model.hasEverConnected {
+            // Checked before hasEverConnected so the running-dog screen
+            // covers every in-flight connect() call -- the initial attempt,
+            // a reload of the current host, and switching to a brand-new
+            // host typed into ScanGridView's address bar -- not just the
+            // very first connection before anything has ever succeeded.
+            if model.state == .connecting {
+                ConnectingView()
+            } else if model.hasEverConnected {
                 ScanGridView(model: model)
             } else {
                 HostEntryView(model: model)

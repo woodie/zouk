@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import SwiftUI
 import ZoukKit
 
@@ -7,11 +8,33 @@ struct ZoukApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("zouk") {
+        WindowGroup("Zouk Scan Retriever") {
             ContentView()
         }
         .windowResizability(.contentSize)
+        .commands {
+            // Replaces the default "About zouk" item (which would otherwise
+            // show the bundle's literal CFBundleName, "zouk") with one that
+            // calls the same native panel, just with our full display name
+            // and a copyright credits line -- no separate custom About
+            // window/sheet to build or maintain.
+            CommandGroup(replacing: .appInfo) {
+                Button("About Zouk Scan Retriever") {
+                    NSApplication.shared.orderFrontStandardAboutPanel(options: [
+                        .applicationName: "Zouk Scan Retriever",
+                        .credits: NSAttributedString(
+                            string: "© \(currentYear) John Woodell",
+                            attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]
+                        )
+                    ])
+                }
+            }
+        }
     }
+}
+
+private var currentYear: String {
+    String(Calendar.current.component(.year, from: Date()))
 }
 
 /// `swift run` launches zouk as a bare process with no .app bundle, so
@@ -23,5 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // Sets the Dock icon for `swift run`/dev launches too, not just the
+        // hand-bundled .app (which gets it from Info.plist's
+        // CFBundleIconFile / Contents/Resources/AppIcon.icns).
+        NSApp.applicationIconImage = AppIcon.nsImage
     }
 }

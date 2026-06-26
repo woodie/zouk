@@ -31,11 +31,6 @@ public final class AppModel: ObservableObject {
     /// shown after an action completes, so a click has visible proof it
     /// did something instead of just silently clearing the selection.
     @Published public var statusMessage: String?
-    /// Set only when a connect attempt fails to reach an otherwise
-    /// well-formed host, so the grid's status bar can show a short
-    /// "Can't reach <host>" instead of repeating that inside the
-    /// centered error message too.
-    @Published public var unreachableHost: String?
 
     private static let hostKey = "zouk.lastHost"
 
@@ -53,9 +48,11 @@ public final class AppModel: ObservableObject {
     ) {
         self.defaults = defaults
         self.hostInput = defaults.string(forKey: Self.hostKey) ?? ""
-        self.cacheDirectory = cacheDirectory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("zouk/files", isDirectory: true)
-        self.downloadsDirectory = downloadsDirectory ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        self.cacheDirectory = cacheDirectory
+            ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+                .appendingPathComponent("zouk/files", isDirectory: true)
+        self.downloadsDirectory = downloadsDirectory
+            ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
 
         if autoConnect, !hostInput.isEmpty {
@@ -63,9 +60,18 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// ConnectingView (the running-dog screen) stays up at least this long
+    /// once we've started attempting a connection, even if the network
+    /// round-trip itself finishes much faster -- reconnecting to a saved
+    /// host over a local network can resolve in a handful of milliseconds,
+    /// which would otherwise skip right past it. Real, slower connections
+    /// just take however long they take; this only ever adds time, never
+    /// caps it.
+    private static let minimumConnectingDuration: Duration = .seconds(2)
+
     public func connect() async {
         guard let baseURL = Self.baseURL(fromHostInput: hostInput) else {
-            unreachableHost = nil
+            hasEverConnected = false
             state = .failed("Enter a hostname or IP address, like scans.example.com or 10.0.1.111.")
             return
         }
@@ -73,18 +79,30 @@ public final class AppModel: ObservableObject {
         isBusy = true
         defer { isBusy = false }
 
+        let attemptStart = ContinuousClock.now
         let client = ScanClient(baseURL: baseURL)
         self.client = client
         do {
             scans = try await client.fetchScans()
+            await Self.waitOutMinimumConnectingDuration(since: attemptStart)
             defaults.set(hostInput, forKey: Self.hostKey)
             hasEverConnected = true
-            unreachableHost = nil
             state = .connected
         } catch {
-            unreachableHost = hostInput
+            await Self.waitOutMinimumConnectingDuration(since: attemptStart)
+            // Any failure to connect -- whether this is the very first
+            // attempt or a reload from an already-open grid -- just bounces
+            // back to HostEntryView rather than showing an error in place,
+            // so there's only ever one "something's wrong" screen.
+            hasEverConnected = false
             state = .failed("Check that it's on the same network.")
         }
+    }
+
+    private static func waitOutMinimumConnectingDuration(since start: ContinuousClock.Instant) async {
+        let elapsed = ContinuousClock.now - start
+        guard elapsed < minimumConnectingDuration else { return }
+        try? await Task.sleep(for: minimumConnectingDuration - elapsed)
     }
 
     public func changeServer() {
@@ -92,7 +110,6 @@ public final class AppModel: ObservableObject {
         state = .idle
         scans = []
         selectedScanID = nil
-        unreachableHost = nil
         client = nil
         thumbnailCache.removeAll()
     }
@@ -136,7 +153,6 @@ public final class AppModel: ObservableObject {
             let destination = try await client.download(scan, to: downloadsDirectory, cacheDirectory: cacheDirectory)
             showStatus("Downloaded \(destination.lastPathComponent) to Downloads.")
         } catch {
-            unreachableHost = nil
             state = .failed("Lost connection to \(hostInput) while downloading \(scan.name).")
         }
     }
