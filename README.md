@@ -7,22 +7,21 @@
 
 ![zouk's scan grid, showing two real scans](docs/window.png)
 
+<img height="80" align="right" src="docs/insecure.png">
+
 We now have [tools](https://github.com/woodie/lambada/) to get files from
 an old scanner (that requires and open relay) but downloading files over HTTP
 with a web browser can be a drag (with steps to keep unsafe documents off your
 computer) and setting up HTTPS on your internal network is an absolute pain.
 Finally, serving files with Samba can work but it can be slow and awkward to use.
 
-<img align="right" src="docs/insecure.png">
-![zouk's hero image](docs/art_smaller.png)
+<img align="left" src="docs/art_smaller.png">
 
 Fear not, now we have the Zouk scan retriever.
 A minimal macOS client for browsing and downloading scans through
 [lambada](https://github.com/woodie/lambada) (created with Go) or
 [scandalous](https://github.com/woodie/scandalous) (created with Ruby).
 The main screen is similar ro a Samba share but much fater and easier to use.
-
-## Using it
 
 On launch, zouk asks for a hostname or IP address (e.g.
 `10.0.1.111`) and remembers it for next time.
