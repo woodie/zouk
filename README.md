@@ -17,10 +17,10 @@ Finally, serving files with Samba can work but it can be slow and awkward to use
 
 <img align="left" src="docs/art_smaller.png">
 
-Fear not, now we have the Zouk scan retriever.
-A minimal macOS client for browsing and downloading scans through
-[lambada](https://github.com/woodie/lambada) (created with Go) or
-[scandalous](https://github.com/woodie/scandalous) (created with Ruby).
+Fear not, now we have the Zouk scan retriever for MacOS.
+This minimal Swift app is just what we need for browsing and downloading scans
+through [lambada](https://github.com/woodie/lambada) (created with Go)
+or [scandalous](https://github.com/woodie/scandalous) (created with Ruby).
 The main screen is similar ro a Samba share but much fater and easier to use.
 
 On launch, zouk asks for a hostname or IP address (e.g.
