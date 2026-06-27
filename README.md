@@ -13,6 +13,7 @@ with a web browser can be a drag (with steps to keep unsafe documents off your
 computer) and setting up HTTPS on your internal network is an absolute pain.
 Finally, serving files with Samba can work but it can be slow and awkward to use.
 
+<img align="right" src="docs/insecure.png">
 ![zouk's hero image](docs/art_smaller.png)
 
 Fear not, now we have the Zouk scan retriever.
