@@ -41,8 +41,34 @@ Makefile target.
 - `git status` typically has uncommitted changes after a design pass --
   check before assuming HEAD reflects the latest UI.
 - Task #16 on the standing task list (convert `Tests/ZoukKitTests` to
-  Quick/Nimble `describe/context/it` style) is still pending and unrelated
-  to recent UI work -- pick it up independently if asked.
+  Quick/Nimble `describe/context/it` style) is done: `AppModelTests.swift`,
+  `ScanClientTests.swift`, and `ScanEntryTests.swift` were replaced 1:1 by
+  `AppModelSpec.swift`, `ScanClientSpec.swift`, and `ScanEntrySpec.swift`,
+  matching xctidy/next-caltrain-swift's spec style (`final class FooSpec:
+  QuickSpec`, `override class func spec()`, `describe`/`context`/`it`).
+  `AppModel` is `@MainActor`, which next-caltrain-swift's specs never had
+  to deal with -- each affected `it` hops over via `await MainActor.run { ... }`
+  rather than marking the whole spec class `@MainActor`, since Quick's
+  `it`/`beforeEach` closures aren't isolated by default. Made by inspection
+  only per the sandbox limitation above; confirmed via a real `make test`
+  on the user's Mac -- all 13 specs pass.
+- A real `make test | xctidy` run against this repo's output also caught
+  an unrelated bug in `xctidy` itself: its comma-disambiguation
+  dictionary came back empty for any project laid out the way SwiftPM
+  expects (`Tests/<ModuleName>Tests/*.swift`, one level below the
+  directory `xctidy` is told to scan), so descriptions with a bare prose
+  comma rendered as spurious extra nesting. At the time, three `it`
+  descriptions here were reworded to avoid commas entirely as a
+  workaround (`"decodes the name size time and url fields"`, `"is nil
+  along with downloadedAt"` in `ScanEntrySpec.swift`, `"...baseURL by
+  replacing the whole path"` in `ScanClientSpec.swift`). Now that
+  `xctidy` is fixed upstream (tagged `v0.2.1`; see that repo's own
+  `docs/COWORK.md` for the root cause), the workaround is gone -- all
+  three are back to their natural prose-comma phrasing
+  (`"decodes the name, size, time, and url fields"`, `"is nil, along
+  with downloadedAt"`, `"...baseURL, replacing the whole path"`) and
+  render correctly as long as `xctidy` is rebuilt/reinstalled at
+  `v0.2.1` or later.
 
 ## Next up (per the user, not yet written)
 
