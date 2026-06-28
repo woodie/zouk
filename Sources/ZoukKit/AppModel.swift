@@ -159,12 +159,7 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Double-click on a thumbnail: used to download straight to
-    /// ~/Downloads with no prompt, web-browser style, on the theory that
-    /// double-click should "just open it" like a file on a mounted
-    /// network share. In practice the file never stayed in Downloads --
-    /// it always got moved somewhere else right after -- so that silent
-    /// step was friction, not convenience. Now it always shows a native
+    /// Double-click on a thumbnail: Now it always shows a native
     /// Save panel first, pre-filled with `scan.name` and ~/Downloads
     /// already selected, so confirming with no changes reproduces the
     /// old one-step behavior exactly, but renaming or picking a
