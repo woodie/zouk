@@ -6,11 +6,13 @@ import Nimble
 final class ScanClientSpec: AsyncSpec {
     override class func spec() {
         describe("ScanClient") {
+            let name = "1779907271.pdf"
+            let size = 7
+            let time = "2026-06-25T10:30:00-07:00"
+            let url = "/download/\(name)"
+
             let baseURL = URL(string: "http://scans.example.com")!
-            let scan = ScanEntry(
-                name: "1779907271.pdf", size: 7,
-                time: "2026-06-25T10:30:00-07:00", url: "/download/1779907271.pdf"
-            )
+            let scan = ScanEntry(name: name, size: size, time: time, url: url)
 
             describe("#fetchScans()") {
                 var fakeSession: FakeHTTPClient!
@@ -190,10 +192,7 @@ final class ScanClientSpec: AsyncSpec {
                         return (tempURL, response)
                     }
                 }
-
-                afterEach {
-                    try? FileManager.default.removeItem(at: cacheDirectory.deletingLastPathComponent())
-                }
+                afterEach { try? FileManager.default.removeItem(at: cacheDirectory.deletingLastPathComponent()) }
 
                 context("when destination has no existing file") {
                     var saved: URL!
