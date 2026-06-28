@@ -69,6 +69,51 @@ Makefile target.
   with downloadedAt"`, `"...baseURL, replacing the whole path"`) and
   render correctly as long as `xctidy` is rebuilt/reinstalled at
   `v0.2.1` or later.
+- Zouk's methods tested, not internals: `Tests/ZoukKitTests` specs are
+  now organized around each type's actual public methods/properties
+  (`.method(_:)` for static, `#method(_:)` for instance -- matching
+  xctidy/next-caltrain-swift's `GoodTimesSpec.swift` convention), with
+  shared fixtures declared once and set up via `beforeEach` so an outer
+  `context`'s state cascades down to nested ones, instead of constructing
+  things fresh inline inside each `it`. `ScanClientSpec.swift` in
+  particular dropped two tests that only exercised raw Foundation
+  (`URL(string:relativeTo:)`, `.appendingPathComponent`) without ever
+  calling `ScanClient`, and filled in the `#cachedFile(for:in:)`/
+  `#save(_:to:cacheDirectory:)` placeholders (previously just
+  `expect(true).to(beTrue())`) with real coverage against
+  `FakeHTTPClient` and real temp directories. Made by inspection only per
+  the sandbox limitation above; confirmed via a real `make test` on the
+  user's Mac -- all 20 specs pass. Sharing a `@MainActor` `AppModel`
+  across separate `beforeEach`/`it` calls to `MainActor.run { ... }` in
+  `AppModelSpec.swift` did initially raise `#SendableClosureCaptures`
+  warnings on the shared `model`/`scan` vars (an error under the Swift 6
+  language mode, not yet under the mode this project actually compiles
+  in) -- the compiler can't see that Quick always finishes a `beforeEach`
+  before starting its `it` and never runs either concurrently, so it
+  can't prove the cross-isolation sharing is safe. Silenced with
+  `nonisolated(unsafe)` on both vars rather than restructuring around it,
+  since the assumption it's asserting (no concurrent access) is actually
+  true here -- see the comment at that declaration.
+  Deliberate scope decision made alongside this: no tests for the SwiftUI
+  views -- see the `Tests/ZoukKitTests` entry under Layout below.
+- **Stale-cache bug found and fixed**: `ScanClient.cachedFile(for:in:)`
+  keys its on-disk cache purely by `scan.name`, trusting the doc-commented
+  assumption on `ScanEntry` that the server never reuses a name. Found by
+  the user manually dropping a same-named file into the server's
+  directory to test the "no preview" placeholder -- instead, the grid
+  cell silently showed the *previous* file's thumbnail (a stale local
+  cache entry from earlier testing under that same name), with nothing
+  on screen suggesting anything was wrong. Fixed by comparing the cached
+  file's actual size on disk against `scan.size` before trusting it,
+  re-downloading on a mismatch instead of serving stale bytes forever --
+  see `ScanClient.cachedSizeMatches`. Not foolproof (two different files
+  could coincidentally share a size), but `/scans.json` doesn't expose
+  anything stronger than size/time to check against. Covered by a new
+  `ScanClientSpec` context ("when a same-named file is cached but its
+  size doesn't match scan.size"); the existing "already cached" context's
+  fixture bytes were also corrected to actually be 7 bytes long, matching
+  the shared `scan.size` -- they weren't before, which the old
+  (size-blind) implementation never noticed.
 
 ## Next up (per the user, not yet written)
 
@@ -289,8 +334,19 @@ make xcode     # open Package.swift in Xcode directly
   `ScanGridView`). Library target so `Tests/ZoukKitTests` can
   `@testable import` it.
 - `Sources/zouk` -- thin `@main` entry point.
-- `Tests/ZoukKitTests` -- unit tests for hostname parsing, JSON
-  decoding, formatted date/size, and download-path URL resolution.
+- `Tests/ZoukKitTests` -- Quick/Nimble specs organized by public method
+  rather than by scenario: `ScanEntrySpec` (`Decodable`, `#formattedSize`,
+  `#downloadedAt`/`#formattedDate`), `ScanClientSpec` (`#fetchScans()`,
+  `#cachedFile(for:in:)`, `#save(_:to:cacheDirectory:)`, via the fake
+  `ScanHTTPClient` in `FakeHTTPClient.swift` instead of the real
+  network), and `AppModelSpec` (`.baseURL(fromHostInput:)`,
+  `#toggle(_:)`, `#changeServer()`). Deliberately no tests for the
+  SwiftUI views (`ContentView`, `HostEntryView`, `ScanGridView`,
+  `ConnectingView`, `RunningDogView`) -- this is a small, single-developer
+  app and the model/networking/data-layer coverage above is judged
+  sufficient; view regressions get caught by eye via `make run`, not by
+  an automated suite. Revisit (e.g. snapshot testing or ViewInspector)
+  only if that stops being true.
 - `docs/DELIVERY.md` -- how to cut and hand off a build.
 - `docs/COWORK.md` -- this file.
 - `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS
