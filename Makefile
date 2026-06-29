@@ -8,6 +8,18 @@ RM=/bin/rm -rf
 SWIFT?=swift
 PLISTBUDDY?=/usr/libexec/PlistBuddy
 DITTO?=/usr/bin/ditto
+CODESIGN?=/usr/bin/codesign
+
+# Must match a "Developer ID Application" certificate's exact name in the
+# signing machine's keychain -- `security find-identity -v -p codesigning`
+# lists what's available. Overridable so CI can pass the identity it
+# imports without editing this file.
+#
+# Team ID here (754T277KBJ) is the paid Developer Program team -- it's
+# DIFFERENT from the free personal team (6R5XSSRC9P) behind the "Apple
+# Development" cert Xcode creates automatically. Don't conflate the two;
+# NOTARY_TEAM_ID in release.yml's secrets must also be 754T277KBJ.
+CODESIGN_IDENTITY?=Developer ID Application: John Woodell (754T277KBJ)
 
 BUNDLE_DIR=.build/$(PRODUCT_NAME).app
 RELEASE_DIR=.build/release
@@ -80,13 +92,28 @@ bundle:
 		}; \
 	done
 
+.PHONY: sign
+# Signing (+ notarization, done separately in CI via xcrun notarytool) is
+# what makes Gatekeeper wave the app through with no warning at all.
+# --options runtime turns on the hardened runtime and --timestamp embeds a
+# secure timestamp -- both are hard requirements for notarization to
+# accept the binary. --deep is normally discouraged (Apple wants inner
+# binaries signed before outer ones), but zouk has no embedded
+# frameworks/helpers to worry about -- one binary, one signature.
+sign: bundle
+	$(CODESIGN) --force --deep --options runtime --timestamp \
+		--sign "$(CODESIGN_IDENTITY)" "$(BUNDLE_DIR)"
+	$(CODESIGN) --verify --deep --strict --verbose=2 "$(BUNDLE_DIR)"
+
 .PHONY: package
 # Zips zouk.app for a GitHub release / the Homebrew cask's url to point at.
 # ditto -c -k (not zip -r) because it's Apple's documented way to archive a
 # .app -- preserves resource forks/xattrs that a plain zip can mangle.
 # --keepParent puts zouk.app itself at the zip's top level, which is what
 # both a manual unzip and the cask's `app "zouk.app"` stanza expect.
-package: bundle
+# Depends on sign (not bundle) so anything zipped for release is always
+# signed -- notarization happens after this, in release.yml.
+package: sign
 	$(eval VERSION := $(shell $(PLISTBUDDY) -c "Print :CFBundleShortVersionString" Resources/Info.plist))
 	$(MKDIR) $(RELEASE_DIR)
 	$(RM) "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"

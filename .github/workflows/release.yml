@@ -21,6 +21,46 @@ jobs:
           make build
           make test
 
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          keychain_path="$RUNNER_TEMP/signing.keychain-db"
+          cert_path="$RUNNER_TEMP/certificate.p12"
+
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode -o "$cert_path"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$cert_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychain -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
+
+      - name: Sign
+        run: make sign
+
+      - name: Notarize and staple
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          # notarytool only accepts a zip/dmg/pkg upload, not a raw .app --
+          # this zip is throwaway, just to get bytes to Apple. The zip
+          # `make package` produces next is the real distributable,
+          # built from the now-stapled .build/zouk.app below.
+          submission_zip="$RUNNER_TEMP/zouk-notarize-submission.zip"
+          ditto -c -k --keepParent ".build/zouk.app" "$submission_zip"
+          xcrun notarytool submit "$submission_zip" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait
+          xcrun stapler staple ".build/zouk.app"
+
       - name: Package
         run: make package
 
