@@ -150,35 +150,34 @@ Makefile target.
   Outstanding nit: `Casks/zouk.rb`'s `depends_on macos: ">= :ventura"`
   triggers a deprecation warning (string-comparison form) -- should
   become `depends_on macos: :ventura`, not yet fixed.
-- **Real code signing + notarization, in progress (tasks #24-#30).** The
-  user has a paid Apple Developer Program account, which changes the
-  calculus on the "no warning at all" path `docs/DELIVERY.md` previously
-  wrote off as "overkill for v0.1.0." Done so far: created a `Developer
-  ID Application: John Woodell (754T277KBJ)` identity in Keychain via
-  Xcode -- note this team ID is **different** from `6R5XSSRC9P`, the free
+- **Real code signing + notarization: done and verified (tasks #24-#31).**
+  The user has a paid Apple Developer Program account, which made the "no
+  warning at all" path worthwhile -- `docs/DELIVERY.md` had previously
+  written this off as "overkill for v0.1.0." Created a `Developer ID
+  Application: John Woodell (754T277KBJ)` identity in Keychain via Xcode
+  -- note this team ID is **different** from `6R5XSSRC9P`, the free
   personal team behind the pre-existing `Apple Development` cert; don't
-  conflate the two. Backed up the cert+key as a password-protected
-  `.p12` (Documents, which syncs to iCloud, plus a copy in Google Drive --
-  fine since the file is useless without the export password, which
-  lives separately in Apple Passwords). Added a `sign` target to the
-  Makefile (`codesign --options runtime --timestamp`, required for
-  notarization) and made `package` depend on it. Added six GitHub Actions
-  secrets on `woodie/zouk` (`CERTIFICATE_P12_BASE64`,
-  `CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_APPLE_ID`,
-  `NOTARY_PASSWORD` -- an app-specific password from appleid.apple.com,
-  not the real Apple ID password -- `NOTARY_TEAM_ID` = `754T277KBJ`).
-  Added cert-import + `xcrun notarytool submit --wait` +
-  `xcrun stapler staple` steps to `release.yml`, gated behind those
-  secrets.
-  Two real failures hit and fixed while exercising this end-to-end on a
-  real `v1.5.0` tag: (1) `security import` rejected the first
+  conflate the two. Backed up the cert+key as a password-protected `.p12`
+  (Documents, which syncs to iCloud, plus a copy in Google Drive -- fine
+  since the file is useless without the export password, which lives
+  separately in Apple Passwords). Added a `sign` target to the Makefile
+  (`codesign --options runtime --timestamp`, required for notarization)
+  and made `package` depend on it. Added six GitHub Actions secrets on
+  `woodie/zouk` (`CERTIFICATE_P12_BASE64`, `CERTIFICATE_PASSWORD`,
+  `KEYCHAIN_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_PASSWORD` -- an
+  app-specific password from appleid.apple.com, not the real Apple ID
+  password -- `NOTARY_TEAM_ID` = `754T277KBJ`). Added cert-import +
+  `xcrun notarytool submit --wait` + `xcrun stapler staple` steps to
+  `release.yml`, gated behind those secrets.
+  Two real failures were hit and fixed while exercising this end-to-end
+  on `v1.5.0`: (1) `security import` rejected the first
   `CERTIFICATE_PASSWORD`/`.p12` pair -- likely the classic mix-up between
   the *export* password (protects the `.p12`, what we want) and the *Mac
   login* password (a separate OS prompt during Keychain Access's export
   flow, easy to enter into the wrong place) -- fixed by re-exporting a
   fresh `.p12` with a password set and used immediately, no chance to
   misremember it. Also swapped the workflow's `base64 --decode` for
-  `openssl base64 -d` while in there, since the bare `base64` CLI's
+  `openssl base64 -d -A` while in there, since the bare `base64` CLI's
   decode flag differs between macOS/BSD and GNU and isn't worth the
   ambiguity. (2) Once past that, `codesign --sign --deep` failed outright
   with "unsealed contents present in the bundle root" -- caused by `make
@@ -188,12 +187,24 @@ Makefile target.
   `Sources/ZoukKit/ResourceBundle.swift` so resource lookups go through
   `Bundle.main.resourceURL` (`Contents/Resources`) instead of the
   generated `Bundle.module`, and `make bundle` no longer copies to the
-  top level at all. Not yet re-verified end-to-end -- next tag push is
-  the real test.
-  Once a `brew install --cask zouk` actually launches with zero Gatekeeper
-  warning: strip the Gatekeeper-warning language and `--no-quarantine`
-  workaround from `docs/DELIVERY.md`, `README.md`, and the cask's
-  `caveats` block (task #28).
+  top level at all.
+  A separate, latent bug in `woodie/homebrew-zouk` surfaced once the
+  untrusted-tap gate stopped blocking installs first: the cask's single
+  `version "1.5"` field was used to build both the git tag (wrong --
+  produced `v1.5`, but the real tag is `v1.5.0`) and the zip filename
+  (right -- `zouk-1.5.zip`), 404ing on download. Fixed with Homebrew's
+  compound-version syntax: `version "1.5.0,1.5"` plus
+  `version.before_comma`/`.after_comma` in the cask's `url` (task #31;
+  see that repo's README for the pattern going forward).
+  **Verified end-to-end**: `v1.5.0` tagged, `release.yml` green
+  (signs -> notarizes -> staples -> publishes), `brew install --cask
+  zouk` succeeded, first launch showed only the routine "downloaded from
+  the Internet... none detected" notice (not the blocking malware
+  dialog), and `spctl -a -vv /Applications/zouk.app` confirmed `accepted`
+  / `source=Notarized Developer ID` / `origin=Developer ID Application:
+  John Woodell (754T277KBJ)`. The Gatekeeper-warning / `--no-quarantine`
+  language in `docs/DELIVERY.md`, `README.md`, and the cask's `caveats`
+  block has been updated to match (task #28).
 
 ## Next up (per the user, not yet written)
 
@@ -332,16 +343,17 @@ so these choices are deliberate, not arbitrary:
   granted works. `Info.plist` now sets `NSLocalNetworkUsageDescription`
   so the dialog shows zouk-specific text instead of Apple's generic
   boilerplate.
-- **Gatekeeper / signing** (for handing a build to a family member
-  without Xcode): Apple Silicon binaries get an automatic ad-hoc
-  signature from the linker, which is enough to run -- no paid Developer
-  ID account or Xcode signing needed for one-off distribution. The
-  quarantine flag only gets attached by quarantine-aware transfer
-  methods (AirDrop, Mail, browser download), not USB/local-network copy
-  or `scp`. On current macOS, the override path is System Settings →
+- **Gatekeeper / signing**: the release path (`brew install --cask
+  zouk` / GitHub Release zip) is signed with a real Developer ID and
+  notarized -- no Gatekeeper warning at all, verified via `spctl -a -vv`
+  (see "Current state" above). A local `make bundle` hand-off to a
+  family member without Xcode is still unsigned (Apple Silicon's
+  automatic ad-hoc linker signature only) -- the quarantine flag only
+  gets attached by quarantine-aware transfer methods (AirDrop, Mail,
+  browser download), not USB/local-network copy or `scp`. On current
+  macOS, the override path for that unsigned case is System Settings →
   Privacy & Security → "Open Anyway" (the old right-click bypass is
-  gone). Full notarization is a separate, optional, paid path -- not
-  needed here. Details in `docs/DELIVERY.md`.
+  gone). Details in `docs/DELIVERY.md`.
 
 ## Packaging gotcha: SwiftPM resource bundles + `Bundle.module`
 

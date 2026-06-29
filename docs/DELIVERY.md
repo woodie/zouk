@@ -1,12 +1,15 @@
 # Delivering a zouk build
 
 There are two ways to ship a build: tag a release, which `.github/
-workflows/release.yml` turns into a zipped `.app` on a GitHub Release
-(and what the `woodie/homebrew-zouk` cask installs from); or run `make
-bundle` (or `make run`) on your own Mac and hand the resulting `.app`
-straight to a family member without Xcode. Either way it's the same
-unsigned binary -- this doc covers what that actually means and what the
-other person needs to do to run it.
+workflows/release.yml` builds, **signs, and notarizes**, then attaches
+the zipped `.app` to a GitHub Release (and what the `woodie/homebrew-zouk`
+cask installs from); or run `make bundle` (or `make run`) on your own Mac
+and hand the resulting `.app` straight to a family member without Xcode.
+These are **not** the same binary -- the tagged-release path is signed
+with a real Developer ID and notarized by Apple, so it installs with no
+Gatekeeper warning at all. A local `make bundle` is unsigned (ad-hoc only)
+and still hits Gatekeeper if it travels by a quarantine-aware route. This
+doc covers both paths.
 
 ## What `make bundle` produces
 
@@ -27,20 +30,30 @@ signature, and it carries no weight with Gatekeeper on a different Mac.
 
 ## Will it run on someone else's Mac?
 
-Depends entirely on how the `.app` travels there, not on anything you do
-in Xcode:
+Depends on which build you're handing off:
 
-- **USB drive, local network copy, `scp`** -- no quarantine flag gets
-  attached, so it should just launch normally.
-- **AirDrop, Messages, Mail, a browser download, Slack, `brew install
-  --cask zouk`, etc.** -- any quarantine-aware transfer flags the file
-  (Homebrew Cask quarantines downloads by default), and macOS blocks the
-  first launch with "Apple could not verify this app is free of
-  malware." `brew install --cask zouk --no-quarantine` skips this.
+- **`brew install --cask zouk` (or any GitHub Release zip)** -- this is
+  the signed + notarized build. It launches with no blocking warning;
+  the only thing macOS shows is the routine one-time "downloaded from
+  the Internet... Apple checked it for malicious software and none was
+  detected" notice, which has a normal Open button. Verify any copy with
+  `spctl -a -vv /Applications/zouk.app` -- it should say `accepted`,
+  `source=Notarized Developer ID`.
+- **A local `make bundle`/`make run` build, handed off directly** -- this
+  is unsigned (ad-hoc signature only). Whether it hits Gatekeeper depends
+  on how it travels:
+  - **USB drive, local network copy, `scp`** -- no quarantine flag gets
+    attached, so it should just launch normally.
+  - **AirDrop, Messages, Mail, a browser download, Slack, etc.** -- any
+    quarantine-aware transfer flags the file, and macOS blocks the first
+    launch with "Apple could not verify this app is free of malware."
 
 ## Getting past Gatekeeper (no Xcode needed)
 
-If the recipient hits the blocked-launch dialog, the old right-click ->
+This only applies to the unsigned `make bundle` hand-off path above --
+the signed/notarized `brew install`/GitHub Release build doesn't hit
+this dialog. If the recipient hits the blocked-launch dialog, the old
+right-click ->
 "Open" trick no longer exists as of macOS Sequoia. The current flow:
 
 1. Try to open the app once (it'll be blocked).
@@ -56,13 +69,21 @@ If the recipient hits the blocked-launch dialog, the old right-click ->
 No Xcode signing is required for this path. It's the right call for
 handing a build to one or two family members.
 
-## If we ever need a "no warning at all" install
+## The "no warning at all" install
 
-That requires actually paying for it: a **Developer ID Application**
-certificate (Apple Developer Program, $99/year), then signing,
-`xcrun notarytool submit`, and `xcrun stapler staple` before
-distributing. Worth revisiting if zouk ever goes beyond a handful of
-family installs -- overkill for v0.1.0.
+Done, as of v1.5.0: a paid **Developer ID Application** certificate
+(John Woodell, team `754T277KBJ`) signs the build in CI (`make sign`,
+`--options runtime --timestamp`), then `.github/workflows/release.yml`
+runs `xcrun notarytool submit --wait` and `xcrun stapler staple` before
+the zip is attached to the GitHub Release. Confirmed end-to-end via
+`brew install --cask zouk` followed by `spctl -a -vv /Applications/zouk.app`
+-> `accepted` / `source=Notarized Developer ID` / `origin=Developer ID
+Application: John Woodell (754T277KBJ)`.
+
+The signing identity, six related GitHub secrets
+(`CERTIFICATE_P12_BASE64`, `CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`,
+`NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, `NOTARY_TEAM_ID`), and the
+`.p12` backup locations are documented in `docs/COWORK.md`.
 
 ## Pre-flight checklist for cutting a release
 
