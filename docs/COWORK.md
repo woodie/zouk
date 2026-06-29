@@ -115,6 +115,30 @@ Makefile target.
   the shared `scan.size` -- they weren't before, which the old
   (size-blind) implementation never noticed.
 
+- **Release automation added; v1.4.0 being cut to exercise it for the
+  first time**: `v1.0.0`-`v1.3.0` were all tagged and released by hand,
+  with no GitHub Actions release workflow. Added
+  `.github/workflows/release.yml` (triggers on a pushed `vX.Y.Z` tag,
+  runs `make build`/`make test`/`make package` on `macos-latest`, computes
+  the release zip's sha256 into `$GITHUB_STEP_SUMMARY` under "sha256 for
+  the Homebrew cask", and publishes a GitHub Release via
+  `gh release create ... --generate-notes`), a retroactive
+  `docs/releases/v1.3.0.md`, and `docs/DELIVERY.md`/`README.md` updates
+  documenting the tag -> release -> cask-update flow end to end. Committed
+  and pushed to `main`. Since `v1.3.0` predates this workflow, it has
+  never actually run. `Resources/Info.plist`'s `CFBundleShortVersionString`
+  has been bumped to `1.4` to tag `v1.4.0` and trigger `release.yml` for
+  the first real run.
+- **`woodie/homebrew-zouk` still needs wiring up**: that directory isn't
+  even an initialized git repo yet, and its `Casks/zouk.rb` has
+  `version "1.3"` with a placeholder all-zero `sha256` (commented as
+  such -- no real release zip has ever backed it). Once the `v1.4.0`
+  `release.yml` run finishes, the plan is to copy the sha256 from its
+  step summary into `Casks/zouk.rb` (`version` and `sha256`), `git init`
+  the repo if needed, commit, and push -- only then does
+  `brew install --cask zouk` actually install something real instead of
+  a cask pointing at a checksum that can't match anything.
+
 ## Next up (per the user, not yet written)
 
 - README: a line about *why* zouk exists -- downloading files over HTTP
