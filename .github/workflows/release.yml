@@ -30,7 +30,10 @@ jobs:
           keychain_path="$RUNNER_TEMP/signing.keychain-db"
           cert_path="$RUNNER_TEMP/certificate.p12"
 
-          echo "$CERTIFICATE_P12_BASE64" | base64 --decode -o "$cert_path"
+          # openssl's base64 decode (not the bare `base64` CLI) -- its
+          # decode flag differs across macOS/BSD vs GNU and isn't worth
+          # the ambiguity on a step that's hard to debug from CI logs.
+          echo "$CERTIFICATE_P12_BASE64" | openssl base64 -d -A -out "$cert_path"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
