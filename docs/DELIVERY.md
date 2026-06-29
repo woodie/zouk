@@ -1,9 +1,12 @@
 # Delivering a zouk build
 
-zouk has no CI/release pipeline yet -- "shipping" a build today means
-running `make bundle` (or `make run`) on your own Mac and handing the
-resulting `.app` to a family member without Xcode. This doc covers what
-that binary actually is and what the other person needs to do to run it.
+There are two ways to ship a build: tag a release, which `.github/
+workflows/release.yml` turns into a zipped `.app` on a GitHub Release
+(and what the `woodie/homebrew-zouk` cask installs from); or run `make
+bundle` (or `make run`) on your own Mac and hand the resulting `.app`
+straight to a family member without Xcode. Either way it's the same
+unsigned binary -- this doc covers what that actually means and what the
+other person needs to do to run it.
 
 ## What `make bundle` produces
 
@@ -29,9 +32,11 @@ in Xcode:
 
 - **USB drive, local network copy, `scp`** -- no quarantine flag gets
   attached, so it should just launch normally.
-- **AirDrop, Messages, Mail, a browser download, Slack, etc.** -- any
-  quarantine-aware transfer flags the file, and macOS blocks the first
-  launch with "Apple could not verify this app is free of malware."
+- **AirDrop, Messages, Mail, a browser download, Slack, `brew install
+  --cask zouk`, etc.** -- any quarantine-aware transfer flags the file
+  (Homebrew Cask quarantines downloads by default), and macOS blocks the
+  first launch with "Apple could not verify this app is free of
+  malware." `brew install --cask zouk --no-quarantine` skips this.
 
 ## Getting past Gatekeeper (no Xcode needed)
 
@@ -64,6 +69,16 @@ family installs -- overkill for v0.1.0.
 - [ ] Commit and push all changes (`git status` should be clean).
 - [ ] `make build && make test` pass on macOS.
 - [ ] `make bundle`, smoke-test the resulting `.app` locally.
-- [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style).
-- [ ] Hand off the `.app` and, if the recipient hits Gatekeeper, point
-      them at the "Getting past Gatekeeper" steps above.
+- [ ] Bump `Resources/Info.plist`'s `CFBundleShortVersionString` to the
+      new version -- `make package`'s zip name (and the cask's `url`
+      template) is derived from this value, so it has to match the tag
+      below or the release workflow ships a zip the cask can't find.
+- [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style)
+      and push the tag -- this triggers `.github/workflows/release.yml`,
+      which builds, zips, and attaches the `.app` to a GitHub Release.
+- [ ] Once that run finishes, copy the sha256 from its "sha256 for the
+      Homebrew cask" step summary into `woodie/homebrew-zouk`'s
+      `Casks/zouk.rb` (`version` and `sha256`), commit, and push.
+- [ ] For a non-brew hand-off instead: hand off the `.app` directly, and
+      if the recipient hits Gatekeeper, point them at the "Getting past
+      Gatekeeper" steps above.

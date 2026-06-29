@@ -41,6 +41,19 @@ Run `make run` rather than `swift run` directly -- it assembles a minimal
 `zouk.app` and launches it with `open`, so macOS activates it like a
 normal Mac app instead of leaving keystrokes going to the terminal.
 
+## Install via Homebrew
+
+```
+brew tap woodie/zouk
+brew install --cask zouk
+```
+
+zouk isn't signed or notarized (see
+[docs/DELIVERY.md](docs/DELIVERY.md)), so the first launch hits
+Gatekeeper's "Apple could not verify this app is free of malware" --
+either go to System Settings -> Privacy & Security -> Open Anyway after
+the blocked launch attempt, or install with `--no-quarantine` to skip it.
+
 ## Building
 
 Requires Xcode/Swift on macOS (this is a Mac-only app; no Linux/iOS
@@ -65,3 +78,6 @@ swift test       # or: make test
 - `docs/COWORK.md` -- context for picking this project back up cold.
 - `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS for
   every push/PR to `main`.
+- `.github/workflows/release.yml` -- on a pushed `vX.Y.Z` tag, builds,
+  zips, and attaches the `.app` to a GitHub Release (see
+  `docs/DELIVERY.md`); this is what the Homebrew cask installs from.

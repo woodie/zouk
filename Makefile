@@ -6,8 +6,11 @@ CP=/bin/cp -f
 MKDIR=/bin/mkdir -p
 RM=/bin/rm -rf
 SWIFT?=swift
+PLISTBUDDY?=/usr/libexec/PlistBuddy
+DITTO?=/usr/bin/ditto
 
 BUNDLE_DIR=.build/$(PRODUCT_NAME).app
+RELEASE_DIR=.build/release
 
 SUDO:=$(shell d="$(PREFIX)/bin"; while [ ! -d "$$d" ] && [ "$$d" != "/" ]; do d=$$(dirname "$$d"); done; test -w "$$d" && echo "" || echo "sudo")
 
@@ -76,6 +79,19 @@ bundle:
 			exit 1; \
 		}; \
 	done
+
+.PHONY: package
+# Zips zouk.app for a GitHub release / the Homebrew cask's url to point at.
+# ditto -c -k (not zip -r) because it's Apple's documented way to archive a
+# .app -- preserves resource forks/xattrs that a plain zip can mangle.
+# --keepParent puts zouk.app itself at the zip's top level, which is what
+# both a manual unzip and the cask's `app "zouk.app"` stanza expect.
+package: bundle
+	$(eval VERSION := $(shell $(PLISTBUDDY) -c "Print :CFBundleShortVersionString" Resources/Info.plist))
+	$(MKDIR) $(RELEASE_DIR)
+	$(RM) "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
+	$(DITTO) -c -k --keepParent "$(BUNDLE_DIR)" "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
+	@echo "Wrote $(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
 
 .PHONY: run
 run: bundle
