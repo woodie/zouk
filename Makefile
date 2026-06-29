@@ -62,32 +62,30 @@ bundle:
 	$(CP) Resources/AppIcon.icns "$(BUNDLE_DIR)/Contents/Resources/AppIcon.icns"
 	# Any SwiftPM target with a `resources:` entry (e.g. ZoukKit) makes
 	# swift build emit a *.bundle next to the binary in BUILD_DIRECTORY.
-	# The generated Bundle.module accessor's primary lookup path is built
-	# from Bundle.main.bundleURL, which for a macOS .app is the bundle's
-	# TOP LEVEL (e.g. zouk.app/), not Contents/Resources -- that's the
-	# separate resourceURL property, which this accessor never checks. So
-	# the bundle has to land at the app's top level to actually be found;
-	# copying it into Contents/Resources only (the first attempt at this
-	# fix) looks right by macOS convention but doesn't match what the
-	# accessor checks, and silently keeps shipping a build that
-	# fatalErrors on any machine without the dev's exact .build path. We
-	# copy to both locations: top level because the current accessor's
-	# primary path depends on it, Contents/Resources for convention and
-	# in case a future SwiftPM regenerates the accessor to check
-	# resourceURL instead. See docs/COWORK.md's "Packaging gotcha" note.
+	# This goes into Contents/Resources -- the conventional macOS
+	# location, and the *only* one `codesign` permits once the app is
+	# actually signed (anything sitting outside Contents/ makes `codesign
+	# --sign` fail outright with "unsealed contents present in the bundle
+	# root", not just a notarization-time rejection). An earlier fix also
+	# copied this to the .app's TOP level, because the SwiftPM-generated
+	# Bundle.module accessor never checked resourceURL and that was the
+	# only place it looked. That's no longer needed: ZoukKit's
+	# ResourceBundle.swift now reads Bundle.main.resourceURL directly
+	# (falling back to Bundle.module only for swift run/swift test/Xcode,
+	# where Bundle.main isn't a real .app), so Contents/Resources alone is
+	# both correct and sign-safe. See docs/COWORK.md's "Packaging gotcha"
+	# note for the full history.
 	@for b in "$(BUILD_DIRECTORY)"/*.bundle; do \
 		test -e "$$b" || continue; \
 		name=$$(basename "$$b"); \
-		$(RM) "$(BUNDLE_DIR)/$$name"; \
-		$(CP) -R "$$b" "$(BUNDLE_DIR)/$$name"; \
 		$(RM) "$(BUNDLE_DIR)/Contents/Resources/$$name"; \
 		$(CP) -R "$$b" "$(BUNDLE_DIR)/Contents/Resources/$$name"; \
 	done
 	@for b in "$(BUILD_DIRECTORY)"/*.bundle; do \
 		test -e "$$b" || continue; \
 		name=$$(basename "$$b"); \
-		test -d "$(BUNDLE_DIR)/$$name" || { \
-			echo "error: $$name missing from $(BUNDLE_DIR) top level -- Bundle.module's primary lookup (Bundle.main.bundleURL) will fatalError at runtime without this"; \
+		test -d "$(BUNDLE_DIR)/Contents/Resources/$$name" || { \
+			echo "error: $$name missing from $(BUNDLE_DIR)/Contents/Resources -- ResourceBundle.swift's primary lookup (Bundle.main.resourceURL) will fall back to the dev-only Bundle.module without this, which fatalErrors in a packaged app"; \
 			exit 1; \
 		}; \
 	done

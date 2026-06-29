@@ -10,7 +10,7 @@ import SwiftUI
 enum RunningDogAnimation {
     static let frames: [NSImage] = {
         guard
-            let url = Bundle.module.url(forResource: "RunningDog", withExtension: "gif"),
+            let url = ZoukResources.bundle.url(forResource: "RunningDog", withExtension: "gif"),
             let source = CGImageSourceCreateWithURL(url as CFURL, nil)
         else { return [] }
 

@@ -115,29 +115,85 @@ Makefile target.
   the shared `scan.size` -- they weren't before, which the old
   (size-blind) implementation never noticed.
 
-- **Release automation added; v1.4.0 being cut to exercise it for the
-  first time**: `v1.0.0`-`v1.3.0` were all tagged and released by hand,
-  with no GitHub Actions release workflow. Added
-  `.github/workflows/release.yml` (triggers on a pushed `vX.Y.Z` tag,
-  runs `make build`/`make test`/`make package` on `macos-latest`, computes
-  the release zip's sha256 into `$GITHUB_STEP_SUMMARY` under "sha256 for
-  the Homebrew cask", and publishes a GitHub Release via
-  `gh release create ... --generate-notes`), a retroactive
-  `docs/releases/v1.3.0.md`, and `docs/DELIVERY.md`/`README.md` updates
-  documenting the tag -> release -> cask-update flow end to end. Committed
-  and pushed to `main`. Since `v1.3.0` predates this workflow, it has
-  never actually run. `Resources/Info.plist`'s `CFBundleShortVersionString`
-  has been bumped to `1.4` to tag `v1.4.0` and trigger `release.yml` for
-  the first real run.
-- **`woodie/homebrew-zouk` still needs wiring up**: that directory isn't
-  even an initialized git repo yet, and its `Casks/zouk.rb` has
-  `version "1.3"` with a placeholder all-zero `sha256` (commented as
-  such -- no real release zip has ever backed it). Once the `v1.4.0`
-  `release.yml` run finishes, the plan is to copy the sha256 from its
-  step summary into `Casks/zouk.rb` (`version` and `sha256`), `git init`
-  the repo if needed, commit, and push -- only then does
-  `brew install --cask zouk` actually install something real instead of
-  a cask pointing at a checksum that can't match anything.
+- **Release automation shipped and exercised for real; v1.4.0 is live**:
+  `v1.0.0`-`v1.3.0` were all tagged and released by hand, with no GitHub
+  Actions release workflow. Added `.github/workflows/release.yml`
+  (triggers on a pushed `vX.Y.Z` tag, runs `make build`/`make test`/
+  `make package` on `macos-latest`, computes the release zip's sha256
+  into `$GITHUB_STEP_SUMMARY` under "sha256 for the Homebrew cask", and
+  publishes a GitHub Release via `gh release create ... --generate-notes`),
+  a retroactive `docs/releases/v1.3.0.md`, and `docs/DELIVERY.md`/
+  `README.md` updates documenting the tag -> release -> cask-update flow
+  end to end. `Resources/Info.plist`'s `CFBundleShortVersionString` was
+  bumped to `1.4`, `v1.4.0` tagged and pushed, and `release.yml`'s first
+  real run succeeded (Run #1, "Bump version to 1.4", Success, 1m 27s,
+  zip `zouk-1.4.zip`, sha256
+  `1c26621995e3cba88897d78d9c6a950572330800ae6af99e7d9e61758779f2d3`).
+  Release is live at `github.com/woodie/zouk/releases/tag/v1.4.0`.
+- **`woodie/homebrew-zouk` is wired up and live**: filled `Casks/zouk.rb`
+  with `version "1.4"` and the real sha256 above. The repo itself didn't
+  exist on GitHub yet either, which made this messier than it should
+  have been: created the GitHub repo with a LICENSE pre-added (rather
+  than fully empty), so the local `git init`-based history and the
+  remote's history were unrelated and needed
+  `git pull origin main --allow-unrelated-histories --no-rebase` plus a
+  manual merge-commit message in vim to reconcile -- a plain `git clone`
+  of an empty remote would have avoided this entirely, worth remembering
+  next time a new tap/repo needs creating. Separately, the first `git
+  add`/`commit` only staged `Casks/zouk.rb` and missed `README.md`
+  entirely (an oversight, not a tooling problem), so the repo briefly had
+  no README on GitHub (correctly flagged by GitHub's own "Add a README"
+  banner) until a follow-up commit added it. Both are pushed now.
+  `brew tap woodie/zouk` also hit Homebrew 6.0's new (June 2026)
+  untrusted-tap gate ("Refusing to load cask ... from untrusted tap") --
+  resolved with `brew trust woodie/zouk`, since it's a personal tap.
+  Outstanding nit: `Casks/zouk.rb`'s `depends_on macos: ">= :ventura"`
+  triggers a deprecation warning (string-comparison form) -- should
+  become `depends_on macos: :ventura`, not yet fixed.
+- **Real code signing + notarization, in progress (tasks #24-#30).** The
+  user has a paid Apple Developer Program account, which changes the
+  calculus on the "no warning at all" path `docs/DELIVERY.md` previously
+  wrote off as "overkill for v0.1.0." Done so far: created a `Developer
+  ID Application: John Woodell (754T277KBJ)` identity in Keychain via
+  Xcode -- note this team ID is **different** from `6R5XSSRC9P`, the free
+  personal team behind the pre-existing `Apple Development` cert; don't
+  conflate the two. Backed up the cert+key as a password-protected
+  `.p12` (Documents, which syncs to iCloud, plus a copy in Google Drive --
+  fine since the file is useless without the export password, which
+  lives separately in Apple Passwords). Added a `sign` target to the
+  Makefile (`codesign --options runtime --timestamp`, required for
+  notarization) and made `package` depend on it. Added six GitHub Actions
+  secrets on `woodie/zouk` (`CERTIFICATE_P12_BASE64`,
+  `CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_APPLE_ID`,
+  `NOTARY_PASSWORD` -- an app-specific password from appleid.apple.com,
+  not the real Apple ID password -- `NOTARY_TEAM_ID` = `754T277KBJ`).
+  Added cert-import + `xcrun notarytool submit --wait` +
+  `xcrun stapler staple` steps to `release.yml`, gated behind those
+  secrets.
+  Two real failures hit and fixed while exercising this end-to-end on a
+  real `v1.5.0` tag: (1) `security import` rejected the first
+  `CERTIFICATE_PASSWORD`/`.p12` pair -- likely the classic mix-up between
+  the *export* password (protects the `.p12`, what we want) and the *Mac
+  login* password (a separate OS prompt during Keychain Access's export
+  flow, easy to enter into the wrong place) -- fixed by re-exporting a
+  fresh `.p12` with a password set and used immediately, no chance to
+  misremember it. Also swapped the workflow's `base64 --decode` for
+  `openssl base64 -d` while in there, since the bare `base64` CLI's
+  decode flag differs between macOS/BSD and GNU and isn't worth the
+  ambiguity. (2) Once past that, `codesign --sign --deep` failed outright
+  with "unsealed contents present in the bundle root" -- caused by `make
+  bundle` copying ZoukKit's resource bundle to the `.app`'s *top level*
+  (see "Packaging gotcha" below), which sits outside `Contents/` and
+  `codesign` refuses to seal. Fixed at the root: added
+  `Sources/ZoukKit/ResourceBundle.swift` so resource lookups go through
+  `Bundle.main.resourceURL` (`Contents/Resources`) instead of the
+  generated `Bundle.module`, and `make bundle` no longer copies to the
+  top level at all. Not yet re-verified end-to-end -- next tag push is
+  the real test.
+  Once a `brew install --cask zouk` actually launches with zero Gatekeeper
+  warning: strip the Gatekeeper-warning language and `--no-quarantine`
+  workaround from `docs/DELIVERY.md`, `README.md`, and the cask's
+  `caveats` block (task #28).
 
 ## Next up (per the user, not yet written)
 
@@ -338,6 +394,23 @@ so these choices are deliberate, not arbitrary:
   `swift build`'s own "Building for debugging..." line. Fixed by passing
   `$(SWIFT_BUILD_FLAGS)` to both the build call and the
   `--show-bin-path` lookup, matching how `install` already did it.
+- The top-level copy came back to bite us once real code signing entered
+  the picture (see "Current state" above): `codesign
+  --sign --deep` on a `.build/zouk.app` with a `.bundle` sitting at the
+  top level (alongside `Contents/`, not inside it) fails outright with
+  "unsealed contents present in the bundle root" -- a hard signing error,
+  not just something notarization would object to later. Top-level
+  placement and a signed app turned out to be mutually exclusive.
+  Fixed properly this time instead of patching around it again: added
+  `Sources/ZoukKit/ResourceBundle.swift`, which checks
+  `Bundle.main.resourceURL` (i.e. `Contents/Resources`) directly and only
+  falls back to the generated `Bundle.module` for `swift run`/`swift
+  test`/Xcode, where `Bundle.main` isn't a real `.app`. `AppIconImage.swift`
+  and `RunningDogView.swift` now go through `ZoukResources.bundle`
+  instead of `Bundle.module` directly. `make bundle` copies `*.bundle`
+  into `Contents/Resources` only now -- the top-level copy is gone for
+  good, since nothing reads it anymore and it's actively harmful once
+  signed.
 
 ## Build/test/run
 

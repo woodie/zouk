@@ -11,7 +11,7 @@ import SwiftUI
 /// separate module) also needs it to set the Dock icon at launch.
 public enum AppIcon {
     public static let nsImage: NSImage? = {
-        guard let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png") else { return nil }
+        guard let url = ZoukResources.bundle.url(forResource: "AppIcon", withExtension: "png") else { return nil }
         return NSImage(contentsOf: url)
     }()
 }
