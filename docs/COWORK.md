@@ -229,8 +229,44 @@ none of them are left half-migrated -- an old `zouk` build pointed at a
 freshly-renamed server would 404 on `/scans.json`, and a new `zouk` build
 pointed at an unmigrated server would fail to decode a listing missing
 the `path` key it now expects. Made by inspection only per the sandbox
-limitation above -- **not yet confirmed with a real `make test`/`make
-build` on macOS.**
+limitation above, then **confirmed on real hardware**: `swift test` --
+22/22 passing. Went further than the unit suite too -- woodie ran `make
+run` against the actual production Pi (already on `lambada-web` 2.0.0)
+and confirmed the listing renders and downloads work end to end, *and*
+separately confirmed the pre-rename Homebrew-installed `zouk` fails
+gracefully (not a crash) against the renamed server, matching the
+breaking-change caveat in the release notes.
+
+Committed as `0d1337c` ("Rename /scans.json to /files.json; rename url
+field to path"). `Resources/Info.plist`'s `CFBundleShortVersionString`
+bumped `1.5` -> `1.6` (`CFBundleVersion` `5` -> `6`) in a separate commit,
+tagged `v1.6.0` -- matching the `scandalous`/`lambada-web` side, which
+bumped to `0.3.0`/`2.0.0` for the same change.
+
+### A worse version of the `.git` lock gotcha (see lambada's `docs/COWORK.md` for the milder original)
+
+Every git *write* run from the Cowork sandbox against this repo --
+`git add`, `git commit`, even one that completes successfully -- leaves
+behind a `.git/index.lock` (sometimes `HEAD.lock`, `maintenance.lock`,
+`objects/tmp_obj_*`) that the sandbox cannot unlink
+(`Operation not permitted`). That part was already known. What's new
+here: the stuck lock isn't a sandbox-side illusion that clears once you
+look from the Mac -- it's a real file on the real disk, and it blocks
+**woodie's own native Terminal** too, not just the next sandboxed
+command. `rm`-ing it from the Mac clears it, but only until the next
+sandboxed git write recreates one. Mid-session this caused a tag
+(`v1.6.0`) to land on the wrong commit: a `git add` that staged the
+version bump successfully still left a lock behind that silently ate the
+following `git commit`, so `git tag` tagged the rename commit instead of
+the bump commit one step later. Fixed by deleting and re-creating the tag
+once the bump commit actually existed.
+
+**Working rule going forward, established this session**: once a lock
+fight starts on a given repo, stop running *any* further git commands
+against it from the sandbox -- hand the rest of the sequence to woodie's
+own terminal entirely. Mixing sandboxed and native git commands on the
+same repo in the same stretch is what causes the wrong-commit-tagged
+problem above; an unbroken run from one side or the other doesn't.
 
 ## Next up (per the user, not yet written)
 
