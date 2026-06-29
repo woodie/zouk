@@ -41,6 +41,16 @@ Run `make run` rather than `swift run` directly -- it assembles a minimal
 `zouk.app` and launches it with `open`, so macOS activates it like a
 normal Mac app instead of leaving keystrokes going to the terminal.
 
+## Compatibility
+
+zouk talks `GET /files.json` and expects a `path` field per entry (since
+v1.6.0). That requires a matching server:
+[scandalous](https://github.com/woodie/scandalous) 0.3.0+ or
+[lambada](https://github.com/woodie/lambada)'s lambada-web 2.0.0+. An
+older zouk against a newer server fails gracefully (no listing loads); a
+newer zouk against an un-upgraded server's old `/scans.json` 404s
+outright. Upgrade client and server together.
+
 ## Install via Homebrew
 
 ```
