@@ -9,7 +9,7 @@ final class ScanEntrySpec: QuickSpec {
             let name = "1779907271.pdf"
             let size = 1_500_000
             let time = "2026-06-25T10:30:00-07:00"
-            let url = "/download/\(name)"
+            let path = "/download/\(name)"
 
             describe("Decodable") {
                 var scans: [ScanEntry]!
@@ -17,16 +17,16 @@ final class ScanEntrySpec: QuickSpec {
                 context("when decoding a server JSON listing") {
                     beforeEach {
                         let json = Data("""
-                        [{"name":"\(name)","size":\(size),"time":"\(time)","url":"\(url)"}]
+                        [{"name":"\(name)","size":\(size),"time":"\(time)","path":"\(path)"}]
                         """.utf8)
                         scans = try JSONDecoder().decode([ScanEntry].self, from: json)
                     }
 
-                    it("decodes the name, size, time, and url fields") {
+                    it("decodes the name, size, time, and path fields") {
                         expect(scans).to(haveCount(1))
                         expect(scans[0].name).to(equal(name))
                         expect(scans[0].size).to(equal(size))
-                        expect(scans[0].url).to(equal(url))
+                        expect(scans[0].path).to(equal(path))
                         expect(scans[0].downloadedAt).toNot(beNil())
                     }
                 }
@@ -34,7 +34,7 @@ final class ScanEntrySpec: QuickSpec {
 
             describe("#formattedSize") {
                 var scan: ScanEntry!
-                beforeEach { scan = ScanEntry(name: name, size: size, time: time, url: url) }
+                beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
                 it("is human readable for a multi-megabyte file") {
                     expect(scan.formattedSize).to(contain("MB"))
@@ -45,7 +45,7 @@ final class ScanEntrySpec: QuickSpec {
                 var scan: ScanEntry!
 
                 context("with a valid timestamp") {
-                    beforeEach { scan = ScanEntry(name: name, size: size, time: time, url: url) }
+                    beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
                     it("are both non-nil") {
                         expect(scan.downloadedAt).toNot(beNil())
@@ -54,7 +54,7 @@ final class ScanEntrySpec: QuickSpec {
                 }
 
                 context("with an unparsable timestamp") {
-                    beforeEach { scan = ScanEntry(name: name, size: size, time: "invalid", url: url) }
+                    beforeEach { scan = ScanEntry(name: name, size: size, time: "invalid", path: path) }
 
                     it("are both nil") {
                         expect(scan.downloadedAt).to(beNil())

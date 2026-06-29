@@ -1,21 +1,23 @@
 import Foundation
 
-/// Mirrors one entry from scandalous's `/scans.json` stopgap endpoint
-/// (see scandalous/docs/adr/0001-remote-family-access.md). `name` is a
-/// server-generated Unix-timestamp filename like "1779907271.pdf" -- never
-/// user input -- so it's safe to use directly as a local file/cache name
-/// with no sanitization.
+/// Mirrors one entry from the `/files.json` endpoint served by lambada-web
+/// (or scandalous, its Ruby predecessor). `name` is a server-generated Unix-timestamp filename like
+/// "1779907271.pdf" -- never user input -- so it's safe to use directly as
+/// a local file/cache name with no sanitization. `path` is a
+/// server-relative download path (e.g. "/download/1779907271.pdf"), not a
+/// URL -- it was misnamed `url` until this field (and the endpoint itself,
+/// previously `/scans.json`) were renamed for accuracy.
 public struct ScanEntry: Codable, Identifiable, Equatable {
     public let name: String
     public let size: Int
     public let time: String
-    public let url: String
+    public let path: String
 
-    public init(name: String, size: Int, time: String, url: String) {
+    public init(name: String, size: Int, time: String, path: String) {
         self.name = name
         self.size = size
         self.time = time
-        self.url = url
+        self.path = path
     }
 
     public var id: String { name }

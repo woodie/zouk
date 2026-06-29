@@ -88,7 +88,7 @@ final class AppModelSpec: AsyncSpec {
                             name: "1782420815.pdf",
                             size: 7,
                             time: "2026-06-25T10:30:00-07:00",
-                            url: "/download/1782420815.pdf"
+                            path: "/download/1782420815.pdf"
                         )
                         model.scans = [scan]
                     }

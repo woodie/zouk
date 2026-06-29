@@ -6,10 +6,11 @@ the prior conversation history.
 ## What this is
 
 `zouk` is a minimal SwiftUI macOS app for browsing and downloading scans
-from a home scanner/printer. It talks to a stopgap `GET /scans.json` /
-`GET /download/:filename` API (currently served by the `scandalous`
-repo's web component; see that repo's `docs/adr/0001-remote-family-access.md`
-for why). The main screen deliberately mimics Finder's "connect to a
+from a home scanner/printer. It talks to a `GET /files.json` /
+`GET /download/:filename` API, served by either `lambada-web` (the
+current production backend) or `scandalous` (its Ruby predecessor). The
+endpoint was `/scans.json` until this session; see "This session" below.
+The main screen deliberately mimics Finder's "connect to a
 Samba share" icon grid -- that's the whole design language to preserve.
 
 Read `README.md` first for the user-facing description and API
@@ -107,7 +108,7 @@ Makefile target.
   file's actual size on disk against `scan.size` before trusting it,
   re-downloading on a mismatch instead of serving stale bytes forever --
   see `ScanClient.cachedSizeMatches`. Not foolproof (two different files
-  could coincidentally share a size), but `/scans.json` doesn't expose
+  could coincidentally share a size), but `/files.json` doesn't expose
   anything stronger than size/time to check against. Covered by a new
   `ScanClientSpec` context ("when a same-named file is cached but its
   size doesn't match scan.size"); the existing "already cached" context's
@@ -205,6 +206,31 @@ Makefile target.
   John Woodell (754T277KBJ)`. The Gatekeeper-warning / `--no-quarantine`
   language in `docs/DELIVERY.md`, `README.md`, and the cask's `caveats`
   block has been updated to match (task #28).
+
+## This session: `/files.json` + `url`→`path` field rename (breaking API change)
+
+woodie noticed the JSON field was never a URL -- `/download/<name>` is a
+server-relative path, not a URL -- so `ScanEntry.url`/`json:"url"` is
+renamed to `path`/`json:"path"` throughout `ScanEntry.swift`,
+`ScanClient.swift` (the `cachedFile(for:in:)` call site that resolves it
+against `baseURL`), and every test fixture (`ScanEntrySpec.swift`,
+`ScanClientSpec.swift`, `AppModelSpec.swift`). The endpoint itself moved
+from `/scans.json` to `/files.json` (woodie's reasoning: the API just
+shares files, and "scans" was an unnecessary narrowing given he wants
+room to expand the API later) -- only `ScanClient.fetchScans()`'s
+*implementation* changed which path it requests; the method name itself
+was deliberately left alone, matching the same "don't rename
+methods/functions" constraint applied on the `scandalous`/`lambada-web`
+side of this same change (see lambada's `docs/COWORK.md`).
+
+This is a breaking wire-format change shared across three repos
+(`scandalous`, `lambada-web`, `zouk`), done together in one session so
+none of them are left half-migrated -- an old `zouk` build pointed at a
+freshly-renamed server would 404 on `/scans.json`, and a new `zouk` build
+pointed at an unmigrated server would fail to decode a listing missing
+the `path` key it now expects. Made by inspection only per the sandbox
+limitation above -- **not yet confirmed with a real `make test`/`make
+build` on macOS.**
 
 ## Next up (per the user, not yet written)
 

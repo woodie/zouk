@@ -37,8 +37,8 @@ extension URLSession: ScanHTTPClient {
     }
 }
 
-/// Talks to scandalous's stopgap HTTP API: GET /scans.json for the listing,
-/// GET /download/:filename for the bytes. Downloaded files are cached on
+/// Talks to lambada-web's (or scandalous's) HTTP API: GET /files.json for
+/// the listing, GET /download/:filename for the bytes. Downloaded files are cached on
 /// disk by name (server-generated, supposedly immutable and never reused --
 /// see ScanEntry) so a file fetched once to build a thumbnail is never
 /// fetched twice when the user then clicks Download. `cachedFile(for:in:)`
@@ -58,7 +58,7 @@ public actor ScanClient {
     }
 
     public func fetchScans() async throws -> [ScanEntry] {
-        let listURL = baseURL.appendingPathComponent("scans.json")
+        let listURL = baseURL.appendingPathComponent("files.json")
         let (data, response) = try await session.data(from: listURL)
         try Self.checkOK(response)
         return try JSONDecoder().decode([ScanEntry].self, from: data)
@@ -88,7 +88,7 @@ public actor ScanClient {
         if FileManager.default.fileExists(atPath: local.path), Self.cachedSizeMatches(scan, at: local) {
             return local
         }
-        guard let remote = URL(string: scan.url, relativeTo: baseURL) else {
+        guard let remote = URL(string: scan.path, relativeTo: baseURL) else {
             throw ScanClientError.invalidResponse
         }
         let (tempURL, response) = try await session.download(from: remote)

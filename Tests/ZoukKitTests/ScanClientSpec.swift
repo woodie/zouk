@@ -9,10 +9,10 @@ final class ScanClientSpec: AsyncSpec {
             let name = "1779907271.pdf"
             let size = 7
             let time = "2026-06-25T10:30:00-07:00"
-            let url = "/download/\(name)"
+            let path = "/download/\(name)"
 
             let baseURL = URL(string: "http://scans.example.com")!
-            let scan = ScanEntry(name: name, size: size, time: time, url: url)
+            let scan = ScanEntry(name: name, size: size, time: time, path: path)
 
             describe("#fetchScans()") {
                 var fakeSession: FakeHTTPClient!
@@ -37,8 +37,8 @@ final class ScanClientSpec: AsyncSpec {
                         scans = try await client.fetchScans()
                     }
 
-                    it("requests scans.json under baseURL") {
-                        expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/scans.json"))
+                    it("requests files.json under baseURL") {
+                        expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/files.json"))
                     }
 
                     it("decodes the scans the server returns") {
@@ -92,7 +92,7 @@ final class ScanClientSpec: AsyncSpec {
                         local = try await client.cachedFile(for: scan, in: cacheDirectory)
                     }
 
-                    it("downloads from scan.url resolved against baseURL") {
+                    it("downloads from scan.path resolved against baseURL") {
                         expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/download/1779907271.pdf"))
                     }
 
@@ -156,7 +156,7 @@ final class ScanClientSpec: AsyncSpec {
                         local = try await client.cachedFile(for: scan, in: cacheDirectory)
                     }
 
-                    it("re-downloads from scan.url instead of trusting the stale cache") {
+                    it("re-downloads from scan.path instead of trusting the stale cache") {
                         expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/download/1779907271.pdf"))
                     }
 
