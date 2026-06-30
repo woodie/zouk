@@ -69,18 +69,6 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
           security list-keychain -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
 
-          # Importing Apple's intermediate didn't fix "Could not find
-          # appropriate signing identity" for the Installer cert, which
-          # means the chain-trust theory was wrong (or at least
-          # insufficient) -- need to see what's actually IN this keychain
-          # rather than guess again. find-identity (no -p filter, so it
-          # isn't restricted to the codesigning EKU policy) prints every
-          # identity it considers valid, each as "<hash> <name>". If
-          # "Developer ID Installer: ..." is missing from this list
-          # entirely, the .p12/password is the problem, not pkgbuild.
-          echo "--- identities in $keychain_path ---"
-          security find-identity -v "$keychain_path"
-
       - name: Sign
         run: make sign
 
