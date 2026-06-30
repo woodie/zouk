@@ -43,50 +43,30 @@ normal Mac app instead of leaving keystrokes going to the terminal.
 
 ## Compatibility
 
-zouk talks `GET /files.json` and expects a `path` field per entry (since
-v1.6.0). That requires a matching server:
+zouk talks `GET /files.json` and expects a `path` field per entry.
+Requires a matching server:
 [scandalous](https://github.com/woodie/scandalous) 0.3.0+ or
-[lambada](https://github.com/woodie/lambada)'s lambada-web 2.0.0+. An
-older zouk against a newer server fails gracefully (no listing loads); a
-newer zouk against an un-upgraded server's old `/scans.json` 404s
-outright. Upgrade client and server together.
+[lambada](https://github.com/woodie/lambada)'s lambada-web 2.0.0+.
 
-## Install via Homebrew
+## Development
+
+Building from source and the project layout moved to
+[docs/DEVELOPER.md](docs/DEVELOPER.md).
+
+## Install
+
+**Homebrew** (recommended -- handles updates too):
 
 ```
 brew tap woodie/zouk
 brew install --cask zouk
 ```
 
-zouk is signed and notarized (see [docs/DELIVERY.md](docs/DELIVERY.md)),
-so it installs and launches with no Gatekeeper warning -- just the
-routine "downloaded from the Internet" notice macOS shows on any first
-launch, with a normal Open button.
+**Direct download**: grab the latest `.pkg` from the
+[Releases page](https://github.com/woodie/zouk/releases/latest) and
+double-click it -- Next, Next, Done, like any other Mac installer.
 
-## Building
-
-Requires Xcode/Swift on macOS (this is a Mac-only app; no Linux/iOS
-target).
-
-```
-swift build      # or: make build
-swift run        # or: make run
-swift test       # or: make test
-```
-
-`make xcode` opens `Package.swift` directly in Xcode.
-
-## Layout
-
-- `Sources/ZoukKit` -- model, networking, and views (a library target so
-  `Tests/ZoukKitTests` can `@testable import` it).
-- `Sources/zouk` -- the thin `@main` app entry point.
-- `Tests/ZoukKitTests` -- unit tests for hostname parsing, JSON decoding,
-  and the URL-resolution logic the download path relies on.
-- `docs/DELIVERY.md` -- how to cut and hand off a build.
-- `docs/COWORK.md` -- context for picking this project back up cold.
-- `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS for
-  every push/PR to `main`.
-- `.github/workflows/release.yml` -- on a pushed `vX.Y.Z` tag, builds,
-  zips, and attaches the `.app` to a GitHub Release (see
-  `docs/DELIVERY.md`); this is what the Homebrew cask installs from.
+Either way, zouk is signed and notarized (see
+[docs/DELIVERY.md](docs/DELIVERY.md)), so it installs and launches with
+no Gatekeeper warning -- just the routine "downloaded from the Internet"
+notice macOS shows on any first launch, with a normal Open button.
