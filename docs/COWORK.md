@@ -268,6 +268,76 @@ own terminal entirely. Mixing sandboxed and native git commands on the
 same repo in the same stretch is what causes the wrong-commit-tagged
 problem above; an unbroken run from one side or the other doesn't.
 
+## This session: evaluating a `productbuild` `.pkg` installer (issue #1)
+
+[GitHub issue #1](https://github.com/woodie/zouk/issues/1), "Distrobution
+with productbuild," proposed a `.pkg` installer for people who don't have
+Homebrew. This was a planning/decision session only -- **no code, no git
+commits, nothing exported or added to GitHub yet.**
+
+Context that shaped the decision: woodie's actual hands-on experience
+distributing to family was that Homebrew (which drags in Xcode CLT) was
+overkill, and he ended up using a USB thumb drive with the unsigned
+`make bundle` output instead (USB copy doesn't attach the quarantine
+flag, so it just launches -- see "Gatekeeper / signing" below). A `.pkg`
+doesn't fix a broken path -- the signed/notarized GitHub Release zip
+already gets non-Homebrew users a no-warning install -- it's UX polish:
+double-click -> Next -> Next -> Done reads as more familiar to
+non-technical recipients than "unzip, drag to Applications." Decided
+it's worth doing anyway, partly *because* it doubles as a dry run for a
+second signing identity and a documented template for future projects
+(same framing as the original code-signing work below).
+
+Plan agreed on:
+- New `make pkg` target: `productbuild --component .build/zouk.app
+  /Applications --sign "Developer ID Installer: ..."`.
+- A parallel notarize+staple step in `release.yml` for the `.pkg`
+  (`notarytool` and `stapler` both take `.pkg` directly, same as the
+  zip), with the signed installer attached to the GitHub Release
+  alongside the existing zip -- so a tagged release ships both
+  automatically.
+- A **new Developer ID Installer certificate** -- a separate identity
+  from the existing `Developer ID Application: John Woodell
+  (754T277KBJ)` cert used for app signing; `productbuild --sign` doesn't
+  accept the Application identity. New GitHub secrets
+  (`INSTALLER_CERTIFICATE_P12_BASE64`, `INSTALLER_CERTIFICATE_PASSWORD`),
+  reusing the existing `KEYCHAIN_PASSWORD`/`NOTARY_*` secrets since those
+  are tied to the Apple ID, not the cert.
+- Work happens on a branch (`1-productbuild-pkg`, so GitHub auto-links it
+  to issue #1), not directly on `main` -- not because secrets are
+  branch-scoped (they aren't; they're repo-wide regardless of which
+  branch a workflow runs from), but because `release.yml` changes are
+  exactly the kind of thing that only fails for real on a pushed tag, per
+  the two real failures hit getting the *first* signing identity working
+  on `v1.5.0` (see "Current state" above). A pre-release tag (e.g.
+  `v1.7.0-rc1`) pushed from the branch can exercise the real
+  sign/notarize/staple flow without touching the live Homebrew cask.
+  Per the `.git` lock gotcha above, the actual branch/commit/tag commands
+  should run from woodie's own terminal, not the sandbox.
+
+**Status: stopped before any of the above started.** Walked through the
+cert-creation checklist step by step (CSR via Keychain Access ->
+Developer ID Installer cert on developer.apple.com -> install -> export
+as `.p12` with a *fresh* password, deliberately not the Mac login
+password, since that exact mix-up is what broke the Application cert the
+first time -> back up to Documents+Drive like the existing cert ->
+`openssl base64` encode -> add the two GitHub secrets -> verify with
+`security find-identity -v -p basic`), and offered to drive it
+interactively via Cowork's teach mode (narrated on-screen steps, woodie
+typing anything sensitive himself -- account sign-in, the export
+password, and pasting secret values into GitHub aren't something this
+assistant does regardless of authorization). The teach-mode access
+request hung for 180s and woodie clicked "Later" rather than approving
+mid-timeout, so **the Installer cert doesn't exist yet, no `.p12` was
+exported, no GitHub secrets were added.** Pick back up at "Generate a
+CSR in Keychain Access" next session -- the full checklist above still
+applies unchanged.
+
+woodie also pasted the raw chat transcript into `docs/in-progress.txt`
+before quitting, as a backup in case this summary missed something --
+worth a skim, but this section should already cover the same ground; safe
+to delete once confirmed.
+
 ## Next up (per the user, not yet written)
 
 - README: a line about *why* zouk exists -- downloading files over HTTP
@@ -275,6 +345,9 @@ problem above; an unbroken run from one side or the other doesn't.
 - README: a line on *who this is for* -- anyone with an old scanner that
   needs an open relay (i.e. exactly the `scandalous`/`lambada` situation
   this repo was built around, generalized).
+- Resume the Developer ID Installer cert walkthrough where it stopped
+  (see "This session" above) -- nothing about the plan changed, just
+  pick the checklist back up.
 
 ## Design conventions established so far (don't regress on these)
 

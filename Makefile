@@ -21,8 +21,19 @@ CODESIGN?=/usr/bin/codesign
 # NOTARY_TEAM_ID in release.yml's secrets must also be 754T277KBJ.
 CODESIGN_IDENTITY?=Developer ID Application: John Woodell (754T277KBJ)
 
+# A separate identity from CODESIGN_IDENTITY above -- pkgbuild --sign
+# does not accept a "Developer ID Application" cert, only "Developer ID
+# Installer". Same paid Developer Program team (754T277KBJ), different
+# cert type. Overridable for the same CI reason as CODESIGN_IDENTITY.
+INSTALLER_IDENTITY?=Developer ID Installer: John Woodell (754T277KBJ)
+
 BUNDLE_DIR=.build/$(PRODUCT_NAME).app
 RELEASE_DIR=.build/release
+# pkgbuild, not productbuild -- productbuild --component is only a thin
+# wrapper around pkgbuild for the single-component case and doesn't expose
+# --component-plist, which the pkg target below needs to disable
+# BundleIsVersionChecked.
+PKGBUILD?=/usr/bin/pkgbuild
 
 SUDO:=$(shell d="$(PREFIX)/bin"; while [ ! -d "$$d" ] && [ "$$d" != "/" ]; do d=$$(dirname "$$d"); done; test -w "$$d" && echo "" || echo "sudo")
 
@@ -117,6 +128,56 @@ package: sign
 	$(RM) "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
 	$(DITTO) -c -k --keepParent "$(BUNDLE_DIR)" "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
 	@echo "Wrote $(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).zip"
+
+.PHONY: pkg
+# A double-click installer as an alternative to the zip -- UX polish for
+# non-technical recipients ("Next, Next, Done" vs. "unzip, drag to
+# Applications"); the signed/notarized zip already gets a no-warning
+# install for everyone, pkg doesn't fix a broken path. Depends on sign
+# (not bundle), same reasoning as package: anything shipped for release
+# should always be signed first. The .pkg itself is notarized/stapled
+# separately in release.yml -- notarytool/stapler both take a .pkg
+# directly, no zip-for-upload step needed like the .app requires.
+pkg: sign
+	$(eval VERSION := $(shell $(PLISTBUDDY) -c "Print :CFBundleShortVersionString" Resources/Info.plist))
+	$(eval BUNDLE_ID := $(shell $(PLISTBUDDY) -c "Print :CFBundleIdentifier" Resources/Info.plist))
+	$(MKDIR) $(RELEASE_DIR)
+	$(RM) "$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).pkg"
+	$(eval PKGROOT := $(RELEASE_DIR)/pkgroot)
+	$(eval COMPONENT_PLIST := $(RELEASE_DIR)/component.plist)
+	# pkgbuild's --component form (no --root) doesn't accept
+	# --component-plist at all -- per its own usage text, only the --root
+	# form does. So this stages a destination root
+	# (pkgroot/Applications/zouk.app) instead of pointing --component
+	# straight at $(BUNDLE_DIR), purely to unlock --component-plist below.
+	$(RM) "$(PKGROOT)"
+	$(MKDIR) "$(PKGROOT)/Applications"
+	/bin/cp -R "$(BUNDLE_DIR)" "$(PKGROOT)/Applications/$(PRODUCT_NAME).app"
+	# Hand-written rather than `pkgbuild --analyze --root`, which would
+	# otherwise need a second pkgbuild invocation just to generate this --
+	# this is the same shape --analyze emits for a single app component,
+	# just with BundleIsVersionChecked forced to false: the Installer
+	# otherwise compares CFBundleVersion against whatever's already on
+	# disk and silently skips the copy (while still reporting overall
+	# success) if it isn't strictly newer, and zouk's CFBundleVersion
+	# doesn't bump on every build.
+	echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(COMPONENT_PLIST)"
+	echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(COMPONENT_PLIST)"
+	echo '<plist version="1.0"><array><dict>' >> "$(COMPONENT_PLIST)"
+	echo '<key>BundleHasStrictIdentifier</key><true/>' >> "$(COMPONENT_PLIST)"
+	echo '<key>BundleIsRelocatable</key><false/>' >> "$(COMPONENT_PLIST)"
+	echo '<key>BundleIsVersionChecked</key><false/>' >> "$(COMPONENT_PLIST)"
+	echo '<key>BundleOverwriteAction</key><string>upgrade</string>' >> "$(COMPONENT_PLIST)"
+	echo '<key>RootRelativeBundlePath</key><string>Applications/$(PRODUCT_NAME).app</string>' >> "$(COMPONENT_PLIST)"
+	echo '</dict></array></plist>' >> "$(COMPONENT_PLIST)"
+	$(PKGBUILD) --root "$(PKGROOT)" \
+		--install-location / \
+		--component-plist "$(COMPONENT_PLIST)" \
+		--identifier "$(BUNDLE_ID)" \
+		--version "$(VERSION)" \
+		--sign "$(INSTALLER_IDENTITY)" \
+		"$(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).pkg"
+	@echo "Wrote $(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).pkg"
 
 .PHONY: run
 run: bundle

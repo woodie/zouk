@@ -21,24 +21,33 @@ jobs:
           make build
           make test
 
-      - name: Import signing certificate
+      - name: Import signing certificates
         env:
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          INSTALLER_CERTIFICATE_P12_BASE64: ${{ secrets.INSTALLER_CERTIFICATE_P12_BASE64 }}
+          INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.INSTALLER_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           keychain_path="$RUNNER_TEMP/signing.keychain-db"
           cert_path="$RUNNER_TEMP/certificate.p12"
+          installer_cert_path="$RUNNER_TEMP/installer-certificate.p12"
 
           # openssl's base64 decode (not the bare `base64` CLI) -- its
           # decode flag differs across macOS/BSD vs GNU and isn't worth
           # the ambiguity on a step that's hard to debug from CI logs.
           echo "$CERTIFICATE_P12_BASE64" | openssl base64 -d -A -out "$cert_path"
+          echo "$INSTALLER_CERTIFICATE_P12_BASE64" | openssl base64 -d -A -out "$installer_cert_path"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          # Both certs (Application + Installer) go into the same
+          # keychain -- codesign and productbuild each just need their
+          # respective identity to be findable via -k, no separate
+          # keychains required.
           security import "$cert_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security import "$installer_cert_path" -P "$INSTALLER_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
           security list-keychain -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
 
@@ -67,21 +76,51 @@ jobs:
       - name: Package
         run: make package
 
+      - name: Build installer package
+        run: make pkg
+
+      - name: Notarize and staple installer package
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          # Unlike the .app above, notarytool accepts a .pkg directly --
+          # no throwaway submission zip needed. Stapling attaches the
+          # ticket to the .pkg itself, independent of whatever the .app
+          # inside it has (or doesn't have) stapled.
+          pkg_path=$(ls .build/release/*.pkg)
+          xcrun notarytool submit "$pkg_path" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$pkg_path"
+
       - name: Compute checksum
         id: checksum
         run: |
           zip_path=$(ls .build/release/*.zip)
-          sha256=$(shasum -a 256 "$zip_path" | awk '{print $1}')
+          pkg_path=$(ls .build/release/*.pkg)
+          zip_sha256=$(shasum -a 256 "$zip_path" | awk '{print $1}')
+          pkg_sha256=$(shasum -a 256 "$pkg_path" | awk '{print $1}')
           echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "pkg_path=$pkg_path" >> "$GITHUB_OUTPUT"
           echo "### sha256 for the Homebrew cask" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "$sha256  $(basename "$zip_path")" >> "$GITHUB_STEP_SUMMARY"
+          echo "$zip_sha256  $(basename "$zip_path")" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "### sha256 for the .pkg installer" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "$pkg_sha256  $(basename "$pkg_path")" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" "${{ steps.checksum.outputs.zip_path }}" \
+          gh release create "${{ github.ref_name }}" \
+            "${{ steps.checksum.outputs.zip_path }}" \
+            "${{ steps.checksum.outputs.pkg_path }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes
