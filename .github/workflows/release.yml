@@ -42,6 +42,24 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+
+          # pkgbuild (unlike codesign) refuses to select a signing
+          # identity unless its full certificate chain verifies locally
+          # right at --sign time -- it won't just take the leaf cert+key
+          # on faith the way codesign does. A freshly created CI keychain
+          # has the leaf for both identities but not Apple's intermediate,
+          # which is why `make sign` (codesign, Application cert) can pass
+          # while `make pkg` (pkgbuild, Installer cert) fails with "Could
+          # not find appropriate signing identity". Fetching both the
+          # current G2 intermediate and the legacy one (whichever the
+          # leaf actually chains to) and importing them as plain certs --
+          # no -A/-P, they carry no private key -- fixes chain validation
+          # for both identities.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDCA.cer" https://www.apple.com/certificateauthority/DeveloperIDCA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain_path"
+          security import "$RUNNER_TEMP/DeveloperIDCA.cer" -k "$keychain_path"
+
           # Both certs (Application + Installer) go into the same
           # keychain -- codesign and productbuild each just need their
           # respective identity to be findable via -k, no separate
