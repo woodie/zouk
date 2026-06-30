@@ -1,7 +1,8 @@
 # Picking up zouk in a new Cowork session
 
 Context for whoever opens this repo cold, with none of
-the prior conversation history.
+the prior conversation history. Cross-project conventions (git locks,
+sandbox toolchain) are in `~/workspace/woodie/docs/COWORK.md`.
 
 ## What this is
 
