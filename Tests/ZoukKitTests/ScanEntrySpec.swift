@@ -62,6 +62,31 @@ final class ScanEntrySpec: QuickSpec {
                     }
                 }
             }
+
+            describe("#timeAgo") {
+                var scan: ScanEntry!
+
+                context("with a valid timestamp") {
+                    beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
+
+                    it("is non-nil and doesn't include a trailing \" ago\"") {
+                        // The delete confirmation dialog (ScanGridView) appends
+                        // " ago?" itself -- matching lambada-web/scandalous's
+                        // timeAgo template func, which returns just the
+                        // duration for the same reason.
+                        expect(scan.timeAgo).toNot(beNil())
+                        expect(scan.timeAgo).toNot(endWith(" ago"))
+                    }
+                }
+
+                context("with an unparsable timestamp") {
+                    beforeEach { scan = ScanEntry(name: name, size: size, time: "invalid", path: path) }
+
+                    it("is nil") {
+                        expect(scan.timeAgo).to(beNil())
+                    }
+                }
+            }
         }
     }
 }

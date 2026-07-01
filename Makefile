@@ -180,8 +180,17 @@ pkg: sign
 	@echo "Wrote $(RELEASE_DIR)/$(PRODUCT_NAME)-$(VERSION).pkg"
 
 .PHONY: run
-run: bundle
+# killall runs *before* bundle rebuilds the binary, not after: overwriting
+# zouk's executable at this path while a previous run of it is still live
+# (still mapped/executing) can corrupt the kernel's code-signature
+# validation for that file -- the next launch can then get killed with
+# EXC_BAD_ACCESS/SIGKILL "Code Signature Invalid" the first time it touches
+# an affected page, sometimes well after launch rather than immediately.
+# See docs/crash.txt for a real instance of this. Killing first closes the
+# window entirely: nothing has the old binary mapped when bundle overwrites it.
+run:
 	-killall $(PRODUCT_NAME) 2>/dev/null
+	$(MAKE) bundle
 	open -n "$(BUNDLE_DIR)"
 
 .PHONY: install

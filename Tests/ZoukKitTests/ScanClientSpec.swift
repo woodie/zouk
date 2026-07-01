@@ -166,6 +166,53 @@ final class ScanClientSpec: AsyncSpec {
                 }
             }
 
+            describe("#delete(_:)") {
+                var fakeSession: FakeHTTPClient!
+                var client: ScanClient!
+
+                beforeEach {
+                    fakeSession = FakeHTTPClient()
+                    client = ScanClient(baseURL: baseURL, session: fakeSession)
+                }
+
+                context("when the server responds with 204") {
+                    var requestedURL: URL!
+                    var requestedMethod: String!
+
+                    beforeEach {
+                        fakeSession.requestHandler = { request in
+                            requestedURL = request.url
+                            requestedMethod = request.httpMethod
+                            let response = HTTPURLResponse(
+                                url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil
+                            )!
+                            return (Data(), response)
+                        }
+                        try await client.delete(scan)
+                    }
+
+                    it("sends DELETE to scan.path resolved against baseURL") {
+                        expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/download/1779907271.pdf"))
+                        expect(requestedMethod).to(equal("DELETE"))
+                    }
+                }
+
+                context("when the server responds with a non-2xx status") {
+                    beforeEach {
+                        fakeSession.requestHandler = { request in
+                            let response = HTTPURLResponse(
+                                url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil
+                            )!
+                            return (Data(), response)
+                        }
+                    }
+
+                    it("throws ScanClientError.server with that status code") {
+                        await expect { try await client.delete(scan) }.to(throwError(ScanClientError.server(404)))
+                    }
+                }
+            }
+
             describe("#save(_:to:cacheDirectory:)") {
                 var fakeSession: FakeHTTPClient!
                 var client: ScanClient!
