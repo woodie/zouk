@@ -27,10 +27,13 @@ public final class AppModel: ObservableObject {
     /// click to select and show details, double-click to download).
     @Published public var selectedScanID: String?
     @Published public var isBusy = false
-    /// Transient overlay text shown only while `open(_:)` is actively
-    /// saving a file, e.g. "Saving 1782420815.pdf…". Cleared the moment
-    /// that finishes (success or failure) -- it's a quick heads-up
-    /// mid-save, not the confirmation.
+    /// Transient overlay text shown while `open(_:)` is actively saving a
+    /// file, e.g. "Saving 1782420815.pdf…", cleared the moment that
+    /// finishes (success or failure) -- it's a quick heads-up mid-save, not
+    /// the confirmation. Also reused by `delete(_:)` for a brief
+    /// "Couldn't delete ..." flash on failure (a successful delete needs no
+    /// message here -- the scan just vanishing from the grid is the
+    /// confirmation).
     @Published public var savingMessage: String?
     /// Persistent footer text confirming the *last* file `open(_:)`
     /// saved, e.g. "File 1782420815.pdf saved." Deliberately silent on
@@ -227,6 +230,34 @@ public final class AppModel: ObservableObject {
         } catch {
             savingMessage = nil
             state = .failed("Lost connection to \(hostInput) while saving \(scan.name).")
+        }
+    }
+
+    /// Deletes `scan` from the server (DELETE on the same path GET uses to
+    /// download it -- see ScanClient.delete(_:)) and, on success, removes
+    /// it from `scans`, clearing the selection if it was the one selected.
+    /// The scan vanishing from the grid *is* the confirmation, the same way
+    /// Finder just removes a deleted item rather than popping a separate
+    /// "deleted" toast. On failure, this reuses the `savingMessage` overlay
+    /// capsule for a brief "Couldn't delete ..." flash rather than routing
+    /// through `state`: `state = .failed(...)` would swap the whole grid
+    /// for the connectivity-error screen (see ScanGridView.content), which
+    /// isn't the right response to a delete that failed on an otherwise-
+    /// working connection. Called from ScanGridView's confirmation dialog,
+    /// not directly from the trash button -- see confirmingDelete there.
+    public func delete(_ scan: ScanEntry) async {
+        guard let client else { return }
+        isBusy = true
+        defer { isBusy = false }
+
+        do {
+            try await client.delete(scan)
+            scans.removeAll { $0.id == scan.id }
+            if selectedScanID == scan.id { selectedScanID = nil }
+        } catch {
+            savingMessage = "Couldn't delete \(scan.name)."
+            try? await Task.sleep(for: .seconds(2))
+            savingMessage = nil
         }
     }
 

@@ -14,26 +14,33 @@ public enum ScanClientError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Just the two URLSession calls ScanClient needs, as a protocol so tests
+/// Just the three URLSession calls ScanClient needs, as a protocol so tests
 /// can inject a fake instead of hitting the real network (see
-/// FakeHTTPClient in ZoukKitTests).
+/// FakeHTTPClient in ZoukKitTests). data(for:) is the odd one out -- it
+/// takes a URLRequest rather than a bare URL, since delete(_:) needs to set
+/// an HTTP method other than GET.
 public protocol ScanHTTPClient: Sendable {
     func data(from url: URL) async throws -> (Data, URLResponse)
     func download(from url: URL) async throws -> (URL, URLResponse)
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
 
 extension URLSession: ScanHTTPClient {
-    // URLSession's own data(from:)/download(from:) take a trailing
-    // `delegate:` parameter with a default value -- a default value doesn't
-    // make a method's signature match a protocol requirement that omits
-    // the parameter outright, so these forward explicitly instead of
-    // conforming "for free".
+    // URLSession's own data(from:)/download(from:)/data(for:) all take a
+    // trailing `delegate:` parameter with a default value -- a default
+    // value doesn't make a method's signature match a protocol requirement
+    // that omits the parameter outright, so these forward explicitly
+    // instead of conforming "for free".
     public func data(from url: URL) async throws -> (Data, URLResponse) {
         try await data(from: url, delegate: nil)
     }
 
     public func download(from url: URL) async throws -> (URL, URLResponse) {
         try await download(from: url, delegate: nil)
+    }
+
+    public func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await data(for: request, delegate: nil)
     }
 }
 
@@ -116,6 +123,23 @@ public actor ScanClient {
         }
         try FileManager.default.copyItem(at: cached, to: destination)
         return destination
+    }
+
+    /// Deletes `scan` from the server: DELETE on the exact same
+    /// server-relative path (`scan.path`) GET already uses to download it.
+    /// lambada-web registers both verbs on the same "/download/:filename"
+    /// resource rather than a separate "/delete/:filename" route, so this
+    /// only changes the HTTP method, not the URL. Doesn't touch the local
+    /// cache or AppModel's `scans` array -- AppModel.delete(_:) does that
+    /// on success.
+    public func delete(_ scan: ScanEntry) async throws {
+        guard let remote = URL(string: scan.path, relativeTo: baseURL) else {
+            throw ScanClientError.invalidResponse
+        }
+        var request = URLRequest(url: remote)
+        request.httpMethod = "DELETE"
+        let (_, response) = try await session.data(for: request)
+        try Self.checkOK(response)
     }
 
     private static func checkOK(_ response: URLResponse) throws {

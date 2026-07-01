@@ -18,6 +18,12 @@ import SwiftUI
 /// behavior.
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
+    // Set by the footer's trash button, cleared once the confirmation
+    // dialog resolves either way. Driving the dialog off an Optional
+    // (rather than a Bool alongside a separately-tracked scan) means the
+    // dialog's actions/message closures always get the right scan handed
+    // to them directly, with no chance of reading a stale one.
+    @State private var confirmingDelete: ScanEntry?
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
 
     var body: some View {
@@ -65,17 +71,42 @@ struct ScanGridView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: model.savingMessage)
+        // presenting: hands the exact scan the trash button was clicked
+        // for to the actions closure below, rather than reading back
+        // model.selectedScan (which confirmingDelete deliberately doesn't
+        // depend on -- see its declaration). The title itself is built from
+        // confirmingDelete directly (this modifier's title parameter isn't
+        // a closure) to word-for-word match the web listing's own delete
+        // confirm() -- "Delete this scan from <timeAgo> ago?" -- rather
+        // than a separate title/message pair with size and date, which is
+        // what this used to say before parity with the web prompt was
+        // requested.
+        .confirmationDialog(
+            confirmingDelete.map { "Delete this scan from \($0.timeAgo ?? "an unknown time") ago?" }
+                ?? "Delete this scan?",
+            isPresented: Binding(
+                get: { confirmingDelete != nil },
+                set: { isPresented in if !isPresented { confirmingDelete = nil } }
+            ),
+            presenting: confirmingDelete
+        ) { scan in
+            Button("Delete", role: .destructive) {
+                Task {
+                    await model.delete(scan)
+                    confirmingDelete = nil
+                }
+            }
+        }
     }
 
     /// Finder-style status bar. Priority, highest first: `savedMessage`
     /// (the persistent "File ... saved." confirmation from the most
     /// recent open(_:), if nothing's cleared it since); else the
-    /// clicked scan's date and size -- the scan's own filename is
-    /// server-generated and never meaningful, so it doesn't belong here;
-    /// else the total scan count when nothing's selected. Centered
-    /// either way. (A failed reload bounces back to HostEntryView
-    /// instead of landing here, so there's no "can't reach host" case to
-    /// show in this footer.)
+    /// clicked scan's date and size, plus a trash button that opens the
+    /// delete confirmation dialog above; else the total scan count when
+    /// nothing's selected. Centered either way. (A failed reload bounces
+    /// back to HostEntryView instead of landing here, so there's no
+    /// "can't reach host" case to show in this footer.)
     @ViewBuilder
     private var footer: some View {
         HStack {
@@ -87,6 +118,13 @@ struct ScanGridView: View {
                     Text(date)
                 }
                 Text(scan.formattedSize)
+                Button {
+                    confirmingDelete = scan
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .help("Delete this scan")
             } else {
                 Text(model.scans.isEmpty ? "" : "\(model.scans.count) scans")
             }

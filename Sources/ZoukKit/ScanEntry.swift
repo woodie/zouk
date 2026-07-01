@@ -41,4 +41,22 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         formatter.doesRelativeDateFormatting = true
         return formatter.string(from: downloadedAt)
     }
+
+    /// "6 days ago"/"less than a minute ago"-style relative age, without the
+    /// "ago" suffix -- matches lambada-web/scandalous's own timeAgo/
+    /// time_ago_in_words wording (both ultimately Rails' distance_of_time_in_words),
+    /// used so the delete confirmation dialog (ScanGridView) reads the same
+    /// way the web listing's own delete confirm does: "Delete this scan
+    /// from <timeAgo> ago?".
+    public var timeAgo: String? {
+        guard let downloadedAt else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        let formatted = formatter.localizedString(for: downloadedAt, relativeTo: Date())
+        // RelativeDateTimeFormatter includes its own "ago"/"in" -- strip a
+        // trailing " ago" so callers control where that word goes, the same
+        // way lambada-web's timeAgo template func returns just the
+        // duration and the template appends " ago" itself.
+        return formatted.hasSuffix(" ago") ? String(formatted.dropLast(4)) : formatted
+    }
 }
