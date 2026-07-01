@@ -94,6 +94,17 @@ The signing identity, six related GitHub secrets
       new version -- `make package`'s zip name (and the cask's `url`
       template) is derived from this value, so it has to match the tag
       below or the release workflow ships a zip the cask can't find.
+- [ ] `git checkout main && git pull`, then **`git log -1` right before
+      tagging** and actually read the commit it shows. This has bitten a
+      release twice now (see `docs/COWORK.md`'s `v1.6.0`/`v1.7.0`
+      incidents): tagging from a local `main` that hasn't pulled a
+      just-merged PR puts the tag on the pre-merge commit instead, and
+      `release.yml` then builds and ships *that* -- silently missing
+      whatever the merge added. Re-running the resulting Actions run does
+      **not** fix this; a re-run rebuilds from whatever commit originally
+      triggered it. The fix, if it happens anyway: delete the GitHub
+      Release, delete the tag (local and remote), pull for real, re-tag,
+      re-push.
 - [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style)
       and push the tag -- this triggers `.github/workflows/release.yml`,
       which builds, zips, and attaches the `.app` to a GitHub Release.
