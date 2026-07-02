@@ -87,6 +87,39 @@ final class ScanEntrySpec: QuickSpec {
                     }
                 }
             }
+
+            describe("#timeAgo(relativeTo:)") {
+                // Regression spec for the bug woodie caught 2026-07-02: deleting
+                // a scan seconds after it arrived showed "Delete this scan from
+                // 15 seconds ago" in zouk, while scandalous/lambada-web both
+                // showed "less than a minute ago" for the same age -- see
+                // docs/COWORK.md. Deterministic (fixed `now` passed in) rather
+                // than depending on the real clock, unlike the #timeAgo spec
+                // above.
+                let downloadedAtString = "2026-07-02T12:00:00Z"
+                var scan: ScanEntry!
+                var downloadedAt: Date!
+
+                beforeEach {
+                    scan = ScanEntry(name: name, size: size, time: downloadedAtString, path: path)
+                    downloadedAt = ISO8601DateFormatter().date(from: downloadedAtString)
+                }
+
+                it("clamps sub-30-second ages to \"less than a minute\", matching scandalous/lambada-web") {
+                    let fifteenSecondsLater = downloadedAt.addingTimeInterval(15)
+                    expect(scan.timeAgo(relativeTo: fifteenSecondsLater)).to(equal("less than a minute"))
+                }
+
+                it("still clamps right at the 29-second boundary") {
+                    let twentyNineSecondsLater = downloadedAt.addingTimeInterval(29)
+                    expect(scan.timeAgo(relativeTo: twentyNineSecondsLater)).to(equal("less than a minute"))
+                }
+
+                it("no longer clamps once 30 seconds have passed") {
+                    let thirtySecondsLater = downloadedAt.addingTimeInterval(30)
+                    expect(scan.timeAgo(relativeTo: thirtySecondsLater)).toNot(equal("less than a minute"))
+                }
+            }
         }
     }
 }
