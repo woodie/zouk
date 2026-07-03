@@ -49,6 +49,14 @@ public final class AppModel: ObservableObject {
     /// vanished after a second was too easy to miss; this sticks around
     /// until something else clearly needs the footer instead.
     @Published public var savedMessage: String?
+    /// Non-nil while the footer's delete confirmation should be up, for
+    /// whichever scan it's about. Only `requestDelete(_:)` (the footer's
+    /// trash button) sets this -- the right-click "Move to Trash" item
+    /// skips confirmation entirely and calls `delete(_:)` directly, so it
+    /// never touches this property. `ScanGridView`'s `.confirmationDialog`
+    /// binds its presentation to this being non-nil, and only calls
+    /// `delete(_:)` once the user actually taps "Delete" in it.
+    @Published public var pendingDelete: ScanEntry?
 
     private static let hostKey = "zouk.lastHost"
 
@@ -162,42 +170,43 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Double-click on a thumbnail: Now it always shows a native
-    /// Save panel first, pre-filled with `scan.name` and ~/Downloads
-    /// already selected, so confirming with no changes reproduces the
-    /// old one-step behavior exactly, but renaming or picking a
-    /// different folder is just as easy. Selects the scan unconditionally
-    /// before the panel opens, the same as the old right-click/long-press
-    /// Save As did, so cancelling the panel leaves it selected with its
-    /// stats showing rather than clearing the footer for nothing.
-    ///
-    /// Whatever destination comes back from the panel, this still hands
-    /// the saved file to NSWorkspace afterward -- the one part of the
-    /// original "double-click opens it" idea worth keeping no matter
-    /// where the file ends up. The grid's own listing is untouched
-    /// either way: `scan.name` keeps showing whatever the server called
-    /// it, only the local copy gets whatever name and folder the panel
-    /// was given.
-    ///
-    /// The saved copy always keeps the scan's own extension (whatever
-    /// the scanner actually produced -- usually .pdf, but nothing here
-    /// assumes that), even if the user renames the file in the panel and
-    /// drops or changes it. This deliberately isn't done via
-    /// `panel.allowedContentTypes`: on confirm, that just *appends* its
-    /// required extension to whatever's already there instead of
-    /// replacing a mismatched one -- typing "foobar.zip" would become
-    /// "foobar.zip.pdf", not "foobar.pdf". `ExtensionEnforcingPanelDelegate`
-    /// intercepts the same moment and rewrites it properly instead.
-    /// Skipped entirely on the rare scan name with no extension at all
-    /// -- nothing to enforce.
-    ///
-    /// Shows `savingMessage` while the save's in flight, then swaps that
-    /// for the persistent `savedMessage` once the file's on disk and
-    /// handed off to NSWorkspace. No spinner, no animation -- just text,
-    /// and the part that's meant to actually be noticed is the part that
-    /// doesn't disappear on its own.
+    /// Double-click, and the right-click "Download and Open" item (issue
+    /// #4): Save panel, then hands the result to NSWorkspace.
     public func open(_ scan: ScanEntry) async {
-        guard let client else { return }
+        await saveViaPanel(scan, thenOpen: true)
+    }
+
+    /// Right-click "Download to…" (issue #4): same Save panel as
+    /// open(_:), but never hands the result to NSWorkspace afterward.
+    public func downloadWithoutOpening(_ scan: ScanEntry) async {
+        await saveViaPanel(scan, thenOpen: false)
+    }
+
+    /// Right-click "Fast Download" (issue #4): no panel at all, always
+    /// lands in ~/Downloads, no open. Unlike the panel-based paths (which
+    /// get a "replace this file?" alert from NSSavePanel itself), there's
+    /// no panel here to ask that question, so this goes through
+    /// ScanClient.uniqueDestination(for:in:) for the same Finder-style
+    /// de-dup naming used elsewhere: "scan.pdf" a second time lands at
+    /// "scan (1).pdf" instead of silently overwriting the first one.
+    public func fastDownload(_ scan: ScanEntry) async {
+        guard client != nil else { return }
+        selectedScanID = scan.id
+        savedMessage = nil
+        let destination = ScanClient.uniqueDestination(for: scan.name, in: downloadsDirectory)
+        await save(scan, to: destination, thenOpen: false)
+    }
+
+    /// Shows a Save panel pre-filled with `scan.name` and ~/Downloads,
+    /// selecting the scan unconditionally first so a cancelled panel
+    /// still leaves it selected rather than clearing the footer for
+    /// nothing. The saved copy always keeps the scan's own extension --
+    /// enforced by `ExtensionEnforcingPanelDelegate` rather than
+    /// `panel.allowedContentTypes`, which *appends* its required
+    /// extension instead of replacing a mismatched one ("foobar.zip"
+    /// would become "foobar.zip.pdf", not "foobar.pdf").
+    private func saveViaPanel(_ scan: ScanEntry, thenOpen: Bool) async {
+        guard client != nil else { return }
         selectedScanID = scan.id
         savedMessage = nil
 
@@ -218,19 +227,41 @@ public final class AppModel: ObservableObject {
         panel.delegate = extensionDelegate
         guard panel.runModal() == .OK, let destination = panel.url else { return }
 
+        await save(scan, to: destination, thenOpen: thenOpen)
+    }
+
+    /// Shared save step for all three download paths: shows `savingMessage`
+    /// while in flight, then swaps that for the persistent `savedMessage`
+    /// once the file's on disk (and handed to NSWorkspace, when `thenOpen`).
+    private func save(_ scan: ScanEntry, to destination: URL, thenOpen: Bool) async {
+        guard let client else { return }
         isBusy = true
         savingMessage = "Saving \(destination.lastPathComponent)…"
         defer { isBusy = false }
 
         do {
             try await client.save(scan, to: destination, cacheDirectory: cacheDirectory)
-            NSWorkspace.shared.open(destination)
+            if thenOpen { NSWorkspace.shared.open(destination) }
             savingMessage = nil
             savedMessage = "File \(destination.lastPathComponent) saved."
         } catch {
             savingMessage = nil
             state = .failed("Lost connection to \(hostInput) while saving \(scan.name).")
         }
+    }
+
+    /// Selects `scan` and arms the delete confirmation (`pendingDelete`) for
+    /// it. Only the footer's trash button calls this -- the right-click
+    /// "Move to Trash" item deliberately skips confirmation entirely and
+    /// calls `delete(_:)` straight away (see `ScanThumbnailCell`): picking
+    /// an item from an explicit context menu is already the deliberate
+    /// action Finder's own confirmation dialogs exist to guard against for
+    /// a stray click, so a second gate here would just be friction. The
+    /// footer's single-click trash icon doesn't have that same "I clearly
+    /// meant to do this" quality, so it keeps the confirmation.
+    public func requestDelete(_ scan: ScanEntry) {
+        selectedScanID = scan.id
+        pendingDelete = scan
     }
 
     /// Deletes `scan` from the server (DELETE on the same path GET uses to
@@ -243,8 +274,10 @@ public final class AppModel: ObservableObject {
     /// through `state`: `state = .failed(...)` would swap the whole grid
     /// for the connectivity-error screen (see ScanGridView.content), which
     /// isn't the right response to a delete that failed on an otherwise-
-    /// working connection. Called from ScanGridView's confirmation dialog,
-    /// not directly from the trash button -- see confirmingDelete there.
+    /// working connection. Called two ways: directly from the right-click
+    /// "Move to Trash" item (no confirmation), or from ScanGridView's
+    /// confirmation dialog once the user taps "Delete" there (footer trash
+    /// button path) -- see `requestDelete(_:)` above.
     public func delete(_ scan: ScanEntry) async {
         guard let client else { return }
         isBusy = true

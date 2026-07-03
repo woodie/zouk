@@ -142,6 +142,22 @@ public actor ScanClient {
         try Self.checkOK(response)
     }
 
+    /// Finder-style de-duplication: downloading "scan.pdf" a second time
+    /// produces "scan (1).pdf", then "scan (2).pdf", and so on, instead of
+    /// silently overwriting the file already in Downloads.
+    nonisolated static func uniqueDestination(for filename: String, in directory: URL) -> URL {
+        let base = (filename as NSString).deletingPathExtension
+        let fileExtension = (filename as NSString).pathExtension
+        var candidate = directory.appendingPathComponent(filename)
+        var counter = 1
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let suffixed = fileExtension.isEmpty ? "\(base) (\(counter))" : "\(base) (\(counter)).\(fileExtension)"
+            candidate = directory.appendingPathComponent(suffixed)
+            counter += 1
+        }
+        return candidate
+    }
+
     private static func checkOK(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw ScanClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw ScanClientError.server(http.statusCode) }

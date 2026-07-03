@@ -349,6 +349,12 @@ Three unrelated threads, tagged together as `v1.7.0`:
 
 **The wrong-commit-tag bug (see "A worse version of the `.git` lock gotcha" above) happened again, for a different reason.** `v1.7.0` was first tagged and pushed from a local `main` that hadn't yet pulled the just-merged PR, so the tag landed on the pre-merge commit instead of the merge commit -- confirmed on GitHub's Actions list, which showed the triggered release run's commit as the old pre-merge SHA, not the merge commit. Manually re-running that Actions run would **not** have fixed it -- a re-run rebuilds from whatever commit originally triggered it, not whatever `main` currently points to. Fixed the same way as the `v1.6.0` incident: delete the GitHub Release, delete the tag (local and remote), `git pull` to make sure `main` is actually current, re-tag, re-push. Given this is now a repeat (different root cause than the lock issue last time, same symptom), `docs/DELIVERY.md`'s pre-flight checklist has an explicit `git log -1` verification step now -- see there.
 
+## This session: `timeAgo` sub-30-second parity bug, and a right-click context menu (issue #4)
+
+**`timeAgo` bucketing bug, found via woodie's own use**: deleting a scan seconds after it arrived showed "Delete this scan from 15 seconds ago?" in zouk, where scandalous/lambada-web both show "less than a minute ago?" for the same age. Root cause: `RelativeDateTimeFormatter` has no "less than a minute" bucket of its own -- it reports literal seconds for anything under a minute, unlike Rails' `time_ago_in_words` (without `include_seconds:`, sub-30-second durations collapse to one "less than a minute" bucket) or `justincampbell/timeago`'s own `seconds < 30` cutoff. Fixed with an explicit `< 30` second clamp in `ScanEntry.timeAgo`, and split `timeAgo` into a computed property (real clock) plus a `timeAgo(relativeTo:)` method so a spec can pin a fixed `now` -- see `ScanEntrySpec`'s `#timeAgo(relativeTo:)` block (15s clamped, 29s boundary clamped, 30s no longer clamped). `scandalous`/`lambada-web` picked up their own fix alongside this: neither suite had actually proved the delete-confirmation *dialog* text before, only the listing's `<span>`, since the real confirm() sentence was assembled by client-side JS their test suites never execute -- both templates now build the full sentence server-side so the exact dialog text is directly assertable.
+
+**Right-click context menu (issue #4)**: reintroduces right-click on `ScanThumbnailCell` with four items -- Download and Open (`AppModel.open(_:)`, same as double-click), Download to… (new `downloadWithoutOpening(_:)`, same Save panel minus the NSWorkspace hand-off), Fast Download (new `fastDownload(_:)`, no panel at all, always lands in ~/Downloads under the scan's own name, silently overwriting same as the panel path already does), and Move to Trash (hands the scan to `ScanGridView`'s existing `confirmingDelete` dialog via a new `requestDelete` closure rather than duplicating that wiring). `open(_:)`'s old body split into `saveViaPanel(_:thenOpen:)` / `save(_:to:thenOpen:)`, shared by all three download paths. This reverses the "Single gesture, no context menu" call from earlier in this doc (see "Design conventions" below) -- that call was right for the problem at the time (a right-click Save-As duplicating double-click exactly), but issue #4 asks for a genuinely different set of actions, so the old reasoning doesn't actually apply here. Not unit-tested at the `AppModel` level, consistent with `open(_:)`/`delete(_:)` never having been: the new methods either need a live `NSSavePanel.runModal()` or a way to inject a fake `client` into `AppModel` that doesn't exist today -- the actual file-write logic they all call through (`ScanClient.save(_:to:cacheDirectory:)`) is already covered by `ScanClientSpec`. Made by inspection only per the sandbox limitation above -- confirmed via `make test`/`make run` on woodie's Mac (29/29 specs), plus manually right-clicking a scan, which caught two things inspection alone missed: the menu items needed explicit `Label(_:systemImage:)` icons (a plain `Button("title")` renders text-only in a context menu -- `arrow.up.right.square` / `icloud.and.arrow.down` / `arrow.down.circle.fill` / `trash`), and setting `confirmingDelete` synchronously from the "Move to Trash" action never presented the dialog -- the NSMenu-backed context menu is still tearing down at that point, so the state change needs to go through `Task { @MainActor in ... }` to land a beat later once that's done. The footer's own trash button doesn't need this since it was never inside a context menu to begin with.
+
 ## Next up (per the user, not yet written)
 
 - README: a line about *why* zouk exists -- downloading files over HTTP
@@ -467,17 +473,18 @@ so these choices are deliberate, not arbitrary:
   `RunningDogView`/spinner overlay during the save -- the user wanted
   the save itself silent and the confirmation to be what's hard to
   miss, not the wait.
-- **Single gesture, no context menu**: only single-click (select) and
-  double-click (`open(_:)`) remain on `ScanThumbnailCell`, given
-  explicit precedence with `TapGesture(count: 2).exclusively(before:
-  TapGesture(count: 1))` rather than two independent `onTapGesture`
-  modifiers. A right-click/long-press variant of the Save panel
-  (`AppModel.saveAs(_:)`, plus a `ScanGridView.RightClickCatcher`
-  AppKit bridge for secondary-click) existed briefly but was removed
-  once double-click absorbed the same panel-then-open behavior --
-  keeping it around afterward would've just been a second gesture for
-  the identical action, which cuts against the "simplify" framing that
-  prompted the merge in the first place.
+- **Click/double-click, plus a right-click menu (superseded, see issue
+  #4 below)**: single-click (select) and double-click (`open(_:)`)
+  remain on `ScanThumbnailCell`, given explicit precedence with
+  `TapGesture(count: 2).exclusively(before: TapGesture(count: 1))`
+  rather than two independent `onTapGesture` modifiers. This project
+  previously removed a right-click/long-press Save-As variant
+  (`AppModel.saveAs(_:)` + `ScanGridView.RightClickCatcher`) once
+  double-click absorbed the same panel-then-open behavior, reasoning
+  that a second gesture for the identical action cut against
+  "simplify." Issue #4 reintroduced right-click anyway, but with a
+  genuinely different set of actions (not a duplicate) -- see "This
+  session" below.
 
 ## macOS quirks worth knowing before debugging "it doesn't connect"
 
