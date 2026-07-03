@@ -141,6 +141,24 @@ final class AppModelSpec: AsyncSpec {
                         }
                     }
                 }
+
+                describe("#requestDelete(_:)") {
+                    // The footer's trash button is the only caller of this --
+                    // it's what arms ScanGridView's .confirmationDialog. The
+                    // right-click "Move to Trash" item deliberately skips this
+                    // and calls delete(_:) directly with no confirmation, so
+                    // it's out of scope here; see AppModel.requestDelete(_:)'s
+                    // doc comment for why the two trash triggers behave
+                    // differently on purpose.
+                    it("selects the scan and arms pendingDelete for it") {
+                        await MainActor.run {
+                            model.requestDelete(scan)
+
+                            expect(model.selectedScanID).to(equal(scan.id))
+                            expect(model.pendingDelete).to(equal(scan))
+                        }
+                    }
+                }
             }
         }
     }

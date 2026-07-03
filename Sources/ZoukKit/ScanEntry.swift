@@ -47,12 +47,24 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     /// time_ago_in_words wording (both ultimately Rails' distance_of_time_in_words),
     /// used so the delete confirmation dialog (ScanGridView) reads the same
     /// way the web listing's own delete confirm does: "Delete this scan
-    /// from <timeAgo> ago?".
+    /// from <timeAgo> ago?". Uses the real current time -- see
+    /// `timeAgo(relativeTo:)` for a version tests can pin to a fixed clock.
     public var timeAgo: String? {
+        timeAgo(relativeTo: Date())
+    }
+
+    /// Same as `timeAgo`, but takes an explicit "now" instead of reading
+    /// the real clock, so a test can assert exact wording (e.g. "15
+    /// seconds before now" -> "less than a minute") deterministically.
+    public func timeAgo(relativeTo now: Date) -> String? {
         guard let downloadedAt else { return nil }
+        // Sub-30-second durations are clamped to "less than a minute", matching scandalous/lambada-web.
+        if abs(now.timeIntervalSince(downloadedAt)) < 30 {
+            return "less than a minute"
+        }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        let formatted = formatter.localizedString(for: downloadedAt, relativeTo: Date())
+        let formatted = formatter.localizedString(for: downloadedAt, relativeTo: now)
         // RelativeDateTimeFormatter includes its own "ago"/"in" -- strip a
         // trailing " ago" so callers control where that word goes, the same
         // way lambada-web's timeAgo template func returns just the

@@ -15,15 +15,13 @@ import SwiftUI
 /// selection or another save needs the footer for something else. That
 /// persistence is the point: a capsule that vanishes on its own timer is
 /// too easy to miss, especially for someone expecting Finder/Samba-share
-/// behavior.
+/// behavior. Right-click adds Download and Open / Download to… / Fast
+/// Download / Move to Trash (issue #4) -- see ScanThumbnailCell. Move to
+/// Trash from that menu deletes immediately with no confirmation; only
+/// the footer's own trash button (below) asks "are you sure" first -- see
+/// AppModel.requestDelete(_:).
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
-    // Set by the footer's trash button, cleared once the confirmation
-    // dialog resolves either way. Driving the dialog off an Optional
-    // (rather than a Bool alongside a separately-tracked scan) means the
-    // dialog's actions/message closures always get the right scan handed
-    // to them directly, with no chance of reading a stale one.
-    @State private var confirmingDelete: ScanEntry?
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
 
     var body: some View {
@@ -71,29 +69,29 @@ struct ScanGridView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: model.savingMessage)
-        // presenting: hands the exact scan the trash button was clicked
-        // for to the actions closure below, rather than reading back
-        // model.selectedScan (which confirmingDelete deliberately doesn't
-        // depend on -- see its declaration). The title itself is built from
-        // confirmingDelete directly (this modifier's title parameter isn't
-        // a closure) to word-for-word match the web listing's own delete
+        // presenting: hands the exact scan requestDelete(_:) armed to the
+        // actions closure below, rather than reading back model.selectedScan
+        // (which model.pendingDelete deliberately doesn't depend on -- see
+        // that property's doc comment). The title itself is built from
+        // pendingDelete directly (this modifier's title parameter isn't a
+        // closure) to word-for-word match the web listing's own delete
         // confirm() -- "Delete this scan from <timeAgo> ago?" -- rather
         // than a separate title/message pair with size and date, which is
         // what this used to say before parity with the web prompt was
         // requested.
         .confirmationDialog(
-            confirmingDelete.map { "Delete this scan from \($0.timeAgo ?? "an unknown time") ago?" }
+            model.pendingDelete.map { "Delete this scan from \($0.timeAgo ?? "an unknown time") ago?" }
                 ?? "Delete this scan?",
             isPresented: Binding(
-                get: { confirmingDelete != nil },
-                set: { isPresented in if !isPresented { confirmingDelete = nil } }
+                get: { model.pendingDelete != nil },
+                set: { isPresented in if !isPresented { model.pendingDelete = nil } }
             ),
-            presenting: confirmingDelete
+            presenting: model.pendingDelete
         ) { scan in
             Button("Delete", role: .destructive) {
                 Task {
                     await model.delete(scan)
-                    confirmingDelete = nil
+                    model.pendingDelete = nil
                 }
             }
         }
@@ -119,7 +117,7 @@ struct ScanGridView: View {
                 }
                 Text(scan.formattedSize)
                 Button {
-                    confirmingDelete = scan
+                    model.requestDelete(scan)
                 } label: {
                     Image(systemName: "trash")
                 }
@@ -315,7 +313,7 @@ private struct ScanThumbnailCell: View {
                 .background(isSelected ? selectionTint : .clear, in: RoundedRectangle(cornerRadius: 4))
         }
         .contentShape(Rectangle())
-        .help("Double-click to choose where to save, then open it.")
+        .help("Double-click to choose where to save, then open it. Right-click for more options.")
         // Explicit precedence with exclusively(before:) rather than two
         // independent onTapGesture modifiers: double only wins if a
         // second tap lands before the single-tap window closes,
@@ -328,6 +326,36 @@ private struct ScanThumbnailCell: View {
                         .onEnded { model.toggle(scan) }
                 )
         )
+        // Reintroduces right-click (issue #4) with more options than the
+        // Save-As-only gesture removed earlier -- see zouk/docs/COWORK.md's
+        // "Design conventions" section for why that's not a contradiction.
+        .contextMenu {
+            Button {
+                Task { await model.open(scan) }
+            } label: {
+                Label("Download and Open", systemImage: "arrow.up.right.square")
+            }
+            Button {
+                Task { await model.downloadWithoutOpening(scan) }
+            } label: {
+                Label("Download to…", systemImage: "icloud.and.arrow.down")
+            }
+            Button {
+                Task { await model.fastDownload(scan) }
+            } label: {
+                Label("Fast Download", systemImage: "arrow.down.circle.fill")
+            }
+            Divider()
+            // Deliberately skips the footer trash button's confirmation
+            // dialog -- see AppModel.requestDelete(_:)'s doc comment for
+            // why picking this from an explicit context menu doesn't get a
+            // second "are you sure" gate.
+            Button(role: .destructive) {
+                Task { await model.delete(scan) }
+            } label: {
+                Label("Move to Trash", systemImage: "trash")
+            }
+        }
         .task { image = await model.thumbnail(for: scan) }
     }
 }
