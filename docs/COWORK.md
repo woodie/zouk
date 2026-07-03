@@ -316,28 +316,36 @@ Plan agreed on:
   Per the `.git` lock gotcha above, the actual branch/commit/tag commands
   should run from woodie's own terminal, not the sandbox.
 
-**Status: stopped before any of the above started.** Walked through the
-cert-creation checklist step by step (CSR via Keychain Access ->
-Developer ID Installer cert on developer.apple.com -> install -> export
-as `.p12` with a *fresh* password, deliberately not the Mac login
-password, since that exact mix-up is what broke the Application cert the
-first time -> back up to Documents+Drive like the existing cert ->
-`openssl base64` encode -> add the two GitHub secrets -> verify with
-`security find-identity -v -p basic`), and offered to drive it
-interactively via Cowork's teach mode (narrated on-screen steps, woodie
-typing anything sensitive himself -- account sign-in, the export
-password, and pasting secret values into GitHub aren't something this
-assistant does regardless of authorization). The teach-mode access
-request hung for 180s and woodie clicked "Later" rather than approving
-mid-timeout, so **the Installer cert doesn't exist yet, no `.p12` was
-exported, no GitHub secrets were added.** Pick back up at "Generate a
-CSR in Keychain Access" next session -- the full checklist above still
-applies unchanged.
+**Status: done.** The cert-creation checklist above was completed and the
+whole plan landed in a later session that never got a matching entry
+here -- this paragraph is the belated write-up, reconstructed from the
+actual state of the repo rather than from a session transcript, so
+treat it as a correction to the stale "stopped before it started" note
+that used to sit here. The Developer ID Installer cert exists, both
+`INSTALLER_CERTIFICATE_P12_BASE64`/`INSTALLER_CERTIFICATE_PASSWORD`
+secrets are on `woodie/zouk`, and `release.yml` imports both the
+Application and Installer `.p12`s into the same CI keychain (plus
+Apple's intermediate certs, needed because `pkgbuild --sign` -- unlike
+`codesign` -- refuses to pick an identity unless its full chain
+verifies locally). One real deviation from the plan above: the `make
+pkg` target ended up using `pkgbuild --root ... --component-plist`
+rather than `productbuild --component`, because the latter doesn't
+expose `--component-plist`, which turned out to be required to force
+`BundleIsVersionChecked` off (otherwise the Installer compares
+`CFBundleVersion` against whatever's already on disk and silently
+no-ops the copy if it isn't strictly newer -- see the `pkg` target's
+comment in the `Makefile`). `release.yml` notarizes and staples the
+`.pkg` directly (no zip-for-upload step needed, unlike the `.app`) and
+`gh release create` attaches both the zip and the `.pkg` to the same
+tagged release. README's "Direct download" section already documents
+the `.pkg` as an alternative to Homebrew. Confirmed working for real on
+`v1.8.0`: `release.yml` built, signed, and notarized both artifacts, and
+its step summary printed valid sha256 checksums for both
+`zouk-1.8.zip` and `zouk-1.8.pkg`.
 
-woodie also pasted the raw chat transcript into `docs/in-progress.txt`
-before quitting, as a backup in case this summary missed something --
-worth a skim, but this section should already cover the same ground; safe
-to delete once confirmed.
+`docs/in-progress.txt` (the raw chat transcript backup mentioned in an
+earlier draft of this section) no longer exists -- already deleted once
+this section was confirmed to cover the same ground.
 
 ## This session: delete support, a real code-signing crash fixed, and the wrong-commit-tag bug happening a second time
 
@@ -355,16 +363,15 @@ Three unrelated threads, tagged together as `v1.7.0`:
 
 **Right-click context menu (issue #4)**: reintroduces right-click on `ScanThumbnailCell` with four items -- Download and Open (`AppModel.open(_:)`, same as double-click), Download to… (new `downloadWithoutOpening(_:)`, same Save panel minus the NSWorkspace hand-off), Fast Download (new `fastDownload(_:)`, no panel at all, always lands in ~/Downloads under the scan's own name, silently overwriting same as the panel path already does), and Move to Trash (hands the scan to `ScanGridView`'s existing `confirmingDelete` dialog via a new `requestDelete` closure rather than duplicating that wiring). `open(_:)`'s old body split into `saveViaPanel(_:thenOpen:)` / `save(_:to:thenOpen:)`, shared by all three download paths. This reverses the "Single gesture, no context menu" call from earlier in this doc (see "Design conventions" below) -- that call was right for the problem at the time (a right-click Save-As duplicating double-click exactly), but issue #4 asks for a genuinely different set of actions, so the old reasoning doesn't actually apply here. Not unit-tested at the `AppModel` level, consistent with `open(_:)`/`delete(_:)` never having been: the new methods either need a live `NSSavePanel.runModal()` or a way to inject a fake `client` into `AppModel` that doesn't exist today -- the actual file-write logic they all call through (`ScanClient.save(_:to:cacheDirectory:)`) is already covered by `ScanClientSpec`. Made by inspection only per the sandbox limitation above -- confirmed via `make test`/`make run` on woodie's Mac (29/29 specs), plus manually right-clicking a scan, which caught two things inspection alone missed: the menu items needed explicit `Label(_:systemImage:)` icons (a plain `Button("title")` renders text-only in a context menu -- `arrow.up.right.square` / `icloud.and.arrow.down` / `arrow.down.circle.fill` / `trash`), and setting `confirmingDelete` synchronously from the "Move to Trash" action never presented the dialog -- the NSMenu-backed context menu is still tearing down at that point, so the state change needs to go through `Task { @MainActor in ... }` to land a beat later once that's done. The footer's own trash button doesn't need this since it was never inside a context menu to begin with.
 
-## Next up (per the user, not yet written)
+## Next up
 
-- README: a line about *why* zouk exists -- downloading files over HTTP
-  in a browser is a drag, which is the actual motivation.
-- README: a line on *who this is for* -- anyone with an old scanner that
-  needs an open relay (i.e. exactly the `scandalous`/`lambada` situation
-  this repo was built around, generalized).
-- Resume the Developer ID Installer cert walkthrough where it stopped
-  (see "This session" above) -- nothing about the plan changed, just
-  pick the checklist back up.
+Nothing pending as of `v1.8.0`. This section used to list three items --
+a README line on *why* zouk exists, a README line on *who it's for*, and
+resuming the Developer ID Installer cert walkthrough -- all three turned
+out to already be done (README's intro paragraph covers the first two
+almost verbatim; the Installer cert/`.pkg` work is covered in "This
+session: evaluating a `productbuild` `.pkg` installer" above), just
+never recorded here at the time. Cleaned up rather than left stale.
 
 ## Design conventions established so far (don't regress on these)
 

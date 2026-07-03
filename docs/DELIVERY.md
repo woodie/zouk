@@ -85,6 +85,27 @@ The signing identity, six related GitHub secrets
 `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, `NOTARY_TEAM_ID`), and the
 `.p12` backup locations are documented in `docs/COWORK.md`.
 
+## The `.pkg` installer
+
+Every tagged release also ships a signed, notarized, stapled `.pkg`
+alongside the zip -- `make pkg` (via a separate **Developer ID
+Installer** identity, distinct from the Application identity above;
+`pkgbuild --sign` doesn't accept the Application cert) plus two more
+GitHub secrets (`INSTALLER_CERTIFICATE_P12_BASE64`,
+`INSTALLER_CERTIFICATE_PASSWORD`), reusing `KEYCHAIN_PASSWORD`/
+`NOTARY_*` since those are tied to the Apple ID, not the cert. This is
+UX polish for non-technical recipients, not a Gatekeeper fix -- the
+signed/notarized zip already installs with no warning -- double-click ->
+Next -> Next -> Done just reads as more familiar than "unzip, drag to
+Applications." `release.yml`'s "Compute checksum" step prints a sha256
+for both artifacts; only the zip's needs to go into
+`woodie/homebrew-zouk`'s `Casks/zouk.rb` below -- the `.pkg`'s checksum
+is informational only (`gh release create` attaches the `.pkg` itself
+directly to the release, nothing else consumes its checksum). See
+`docs/COWORK.md`'s "evaluating a `productbuild` `.pkg` installer"
+section for how this was built and why `pkgbuild` (not `productbuild`)
+ended up being the right call.
+
 ## Pre-flight checklist for cutting a release
 
 - [ ] Commit and push all changes (`git status` should be clean).
