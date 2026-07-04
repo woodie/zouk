@@ -55,18 +55,22 @@ Building from source and the project layout moved to
 
 ## Install
 
-**Homebrew** (recommended -- handles updates too):
+**Homebrew** (handles updates too):
 
 ```
 brew tap woodie/zouk
 brew install --cask zouk
 ```
 
-**Direct download**: grab the latest `.pkg` from the
+**Direct download**
+
+<a href ="https://github.com/woodie/zouk/releases/latest"><img align="left" width="100" 
+  src="https://github.com/user-attachments/assets/e6b7a037-700f-42ef-9848-d4311b0427b8" /></a>
+
+Grab the latest `.pkg` from the
 [Releases page](https://github.com/woodie/zouk/releases/latest) and
 double-click it -- Next, Next, Done, like any other Mac installer.
-
-Either way, zouk is signed and notarized (see
-[docs/DELIVERY.md](docs/DELIVERY.md)), so it installs and launches with
-no Gatekeeper warning -- just the routine "downloaded from the Internet"
-notice macOS shows on any first launch, with a normal Open button.
+Zouk is signed and notarized (see [docs/DELIVERY.md](docs/DELIVERY.md)), 
+so it installs and launches with no Gatekeeper warning -- just the routine
+"downloaded from the Internet" notice macOS shows on any first launch, 
+with a normal Open button.
