@@ -13,6 +13,10 @@ jobs:
     # Xcode/Swift (and gh, used below) preinstalled.
     runs-on: macos-latest
 
+    outputs:
+      zip_version: ${{ steps.checksum.outputs.zip_version }}
+      zip_sha256: ${{ steps.checksum.outputs.zip_sha256 }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -122,8 +126,15 @@ jobs:
           pkg_path=$(ls .build/release/*.pkg)
           zip_sha256=$(shasum -a 256 "$zip_path" | awk '{print $1}')
           pkg_sha256=$(shasum -a 256 "$pkg_path" | awk '{print $1}')
+          # Short version (e.g. "1.8") as it appears in the zip name --
+          # this is the after_comma half of the cask's compound `version`;
+          # the before_comma half is just the pushed tag with its leading
+          # "v" stripped.
+          zip_version=$(basename "$zip_path" .zip | sed 's/^zouk-//')
           echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
           echo "pkg_path=$pkg_path" >> "$GITHUB_OUTPUT"
+          echo "zip_sha256=$zip_sha256" >> "$GITHUB_OUTPUT"
+          echo "zip_version=$zip_version" >> "$GITHUB_OUTPUT"
           echo "### sha256 for the Homebrew cask" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
           echo "$zip_sha256  $(basename "$zip_path")" >> "$GITHUB_STEP_SUMMARY"
@@ -142,3 +153,31 @@ jobs:
             "${{ steps.checksum.outputs.pkg_path }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes
+
+  trigger-homebrew-bump:
+    # The actual cask bump (sed the version/sha256, commit, tag) now lives
+    # in woodie/homebrew-zouk's own .github/workflows/bump-cask.yml,
+    # triggered by the repository_dispatch event fired below -- see that
+    # repo. This job's only job is to fire that event with this release's
+    # version/sha256; homebrew-zouk's own workflow does the write using its
+    # own default GITHUB_TOKEN (scoped to itself), so HOMEBREW_TAP_TOKEN
+    # only ever needs to be able to trigger a dispatch on that repo, not
+    # write to it directly.
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dispatch bump-cask event to homebrew-zouk
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh api repos/woodie/homebrew-zouk/dispatches --input - <<EOF
+          {
+            "event_type": "bump-cask",
+            "client_payload": {
+              "tag": "${{ github.ref_name }}",
+              "short_version": "${{ needs.release.outputs.zip_version }}",
+              "sha256": "${{ needs.release.outputs.zip_sha256 }}"
+            }
+          }
+          EOF
