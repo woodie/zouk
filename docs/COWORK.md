@@ -363,6 +363,63 @@ Three unrelated threads, tagged together as `v1.7.0`:
 
 **Right-click context menu (issue #4)**: reintroduces right-click on `ScanThumbnailCell` with four items -- Download and Open (`AppModel.open(_:)`, same as double-click), Download to… (new `downloadWithoutOpening(_:)`, same Save panel minus the NSWorkspace hand-off), Fast Download (new `fastDownload(_:)`, no panel at all, always lands in ~/Downloads under the scan's own name, silently overwriting same as the panel path already does), and Move to Trash (hands the scan to `ScanGridView`'s existing `confirmingDelete` dialog via a new `requestDelete` closure rather than duplicating that wiring). `open(_:)`'s old body split into `saveViaPanel(_:thenOpen:)` / `save(_:to:thenOpen:)`, shared by all three download paths. This reverses the "Single gesture, no context menu" call from earlier in this doc (see "Design conventions" below) -- that call was right for the problem at the time (a right-click Save-As duplicating double-click exactly), but issue #4 asks for a genuinely different set of actions, so the old reasoning doesn't actually apply here. Not unit-tested at the `AppModel` level, consistent with `open(_:)`/`delete(_:)` never having been: the new methods either need a live `NSSavePanel.runModal()` or a way to inject a fake `client` into `AppModel` that doesn't exist today -- the actual file-write logic they all call through (`ScanClient.save(_:to:cacheDirectory:)`) is already covered by `ScanClientSpec`. Made by inspection only per the sandbox limitation above -- confirmed via `make test`/`make run` on woodie's Mac (29/29 specs), plus manually right-clicking a scan, which caught two things inspection alone missed: the menu items needed explicit `Label(_:systemImage:)` icons (a plain `Button("title")` renders text-only in a context menu -- `arrow.up.right.square` / `icloud.and.arrow.down` / `arrow.down.circle.fill` / `trash`), and setting `confirmingDelete` synchronously from the "Move to Trash" action never presented the dialog -- the NSMenu-backed context menu is still tearing down at that point, so the state change needs to go through `Task { @MainActor in ... }` to land a beat later once that's done. The footer's own trash button doesn't need this since it was never inside a context menu to begin with.
 
+## This session: comment retrofit, `ScanFetching` test seam, and `justBeforeEach`
+
+**Comments moved out of source, into `docs/COMMENTS.md`.** Every
+`Sources/ZoukKit` and `Tests/ZoukKitTests` file was stripped of
+multi-line/rationale comments, cataloged in a new `docs/COMMENTS.md`
+(organized by file, then by symbol), with at most one self-contained
+line left in source where a real gotcha still needed a pointer right
+there (e.g. `ScanEntry.timeAgo(relativeTo:)`'s `// Emulate
+DateHelper.time_ago_in_words()`). None of those one-liners say "see
+docs/COMMENTS.md" -- that file is treated as expected reading, the same
+way this one already is. See "Comment convention" below for the rule
+going forward.
+
+**Four test gaps found and filled**, by cross-referencing
+`docs/COMMENTS.md` against the existing specs for logic/workarounds
+that had rationale documented but no test proving it:
+- `ScanEntry.timeAgo(relativeTo:)`'s future-date branch (`ScanEntrySpec`,
+  "one day earlier" -- asserts `"in 1 day"`, not a stripped `" ago"`
+  that was never there).
+- `ScanClient.uniqueDestination(for:in:)` (`ScanClientSpec`, three
+  nested contexts: name free, name taken once, taken twice).
+- `ExtensionEnforcingPanelDelegate` (new
+  `ExtensionEnforcingPanelDelegateSpec.swift`) -- required dropping
+  `private` off the `final class` declaration in `AppModel.swift` so
+  `@testable import ZoukKit` can reach it; still not exported (no
+  `public`).
+- `AppModel.delete(_:)` -- needed an actual test seam since `AppModel`
+  is `final` (no subclassing) and `ScanClient` is a concrete `actor`
+  (nothing to fake without an abstraction one layer up, mirroring how
+  `ScanHTTPClient` already abstracts `URLSession` for `ScanClient`'s own
+  tests). Added `protocol ScanFetching: Sendable` (the four methods
+  `AppModel` actually calls), `extension ScanClient: ScanFetching {}`,
+  and a new `Tests/ZoukKitTests/FakeScanClient.swift`. `AppModel.client`
+  is now `(any ScanFetching)?` instead of `ScanClient?`. The public
+  initializer became a `convenience init` delegating to a new internal
+  designated `init(..., client: (any ScanFetching)?)` -- `client`
+  deliberately has no default value, since a defaulted one would make
+  `AppModel()` ambiguous between the two initializers.
+
+**`justBeforeEach` adopted for shared "act" steps.** Quick's
+`justBeforeEach` (guaranteed to run after every `beforeEach` at any
+nesting depth, immediately before the `it`) is the closest equivalent
+Quick has to RSpec's `subject {}` -- there's no per-example lazy
+re-evaluation the way RSpec gets from Ruby's dynamic per-context
+subclassing, but for a single shared action call this gets the same DRY
+effect. Applied wherever the exact same action line was duplicated
+across sibling `beforeEach`/`it` blocks, differing only in what a
+`context` set up beforehand: `ExtensionEnforcingPanelDelegateSpec`'s
+`#panel(_:userEnteredFilename:confirmed:)`, `AppModelSpec`'s
+`#delete(_:)`, and `ScanClientSpec`'s `#uniqueDestination(for:in:)` /
+`#cachedFile(for:in:)` / `#save(_:to:cacheDirectory:)`. Each `context`'s
+own `beforeEach` now sets up only what varies (a handler, a
+pre-existing file, an input value); every `it` is a bare assertion.
+
+Made by inspection only per the sandbox limitation above; confirmed via
+a real `make test` on woodie's Mac -- 42/42 specs pass.
+
 ## Next up
 
 Nothing pending as of `v1.8.0`. This section used to list three items --
@@ -619,12 +676,17 @@ under a heading for the relevant file/symbol.
 - `Sources/zouk` -- thin `@main` entry point.
 - `Tests/ZoukKitTests` -- Quick/Nimble specs organized by public method
   rather than by scenario: `ScanEntrySpec` (`Decodable`, `#formattedSize`,
-  `#downloadedAt`/`#formattedDate`), `ScanClientSpec` (`#fetchScans()`,
-  `#cachedFile(for:in:)`, `#save(_:to:cacheDirectory:)`, via the fake
-  `ScanHTTPClient` in `FakeHTTPClient.swift` instead of the real
-  network), and `AppModelSpec` (`.baseURL(fromHostInput:)`,
-  `#toggle(_:)`, `#changeServer()`). Deliberately no tests for the
-  SwiftUI views (`ContentView`, `HostEntryView`, `ScanGridView`,
+  `#downloadedAt`/`#formattedDate`, `#timeAgo(relativeTo:)`),
+  `ScanClientSpec` (`#fetchScans()`, `#cachedFile(for:in:)`,
+  `#delete(_:)`, `#save(_:to:cacheDirectory:)`,
+  `#uniqueDestination(for:in:)`, via the fake `ScanHTTPClient` in
+  `FakeHTTPClient.swift` instead of the real network), `AppModelSpec`
+  (`.baseURL(fromHostInput:)`, `#toggle(_:)`, `#changeServer()`,
+  `#requestDelete(_:)`, `#delete(_:)`, via the fake `ScanFetching` in
+  `FakeScanClient.swift` instead of a real `ScanClient`), and
+  `ExtensionEnforcingPanelDelegateSpec`
+  (`#panel(_:userEnteredFilename:confirmed:)`). Deliberately no tests for
+  the SwiftUI views (`ContentView`, `HostEntryView`, `ScanGridView`,
   `ConnectingView`, `RunningDogView`) -- this is a small, single-developer
   app and the model/networking/data-layer coverage above is judged
   sufficient; view regressions get caught by eye via `make run`, not by
