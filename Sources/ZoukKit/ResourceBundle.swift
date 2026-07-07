@@ -24,8 +24,7 @@ enum ZoukResources {
                 includingPropertiesForKeys: nil
             ),
             let zoukKitBundleURL = contents.first(where: { $0.lastPathComponent.hasSuffix("_ZoukKit.bundle") }),
-            let bundle = Bundle(url: zoukKitBundleURL)
-        {
+            let bundle = Bundle(url: zoukKitBundleURL) {
             return bundle
         }
         return Bundle.module
