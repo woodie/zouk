@@ -14,6 +14,17 @@ public enum ConnectionState: Equatable {
     }
 }
 
+protocol ScanFetching: Sendable {
+    func fetchScans() async throws -> [ScanEntry]
+    @discardableResult
+    func cachedFile(for scan: ScanEntry, in cacheDirectory: URL) async throws -> URL
+    @discardableResult
+    func save(_ scan: ScanEntry, to destination: URL, cacheDirectory: URL) async throws -> URL
+    func delete(_ scan: ScanEntry) async throws
+}
+
+extension ScanClient: ScanFetching {}
+
 @MainActor
 public final class AppModel: ObservableObject {
     @Published public var hostInput: String
@@ -33,14 +44,30 @@ public final class AppModel: ObservableObject {
     private let defaults: UserDefaults
     private let cacheDirectory: URL
     private let downloadsDirectory: URL
-    private var client: ScanClient?
+    private var client: (any ScanFetching)?
     private var thumbnailCache: [String: NSImage] = [:]
 
-    public init(
+    public convenience init(
         defaults: UserDefaults = .standard,
         cacheDirectory: URL? = nil,
         downloadsDirectory: URL? = nil,
         autoConnect: Bool = true
+    ) {
+        self.init(
+            defaults: defaults,
+            cacheDirectory: cacheDirectory,
+            downloadsDirectory: downloadsDirectory,
+            autoConnect: autoConnect,
+            client: nil
+        )
+    }
+
+    init(
+        defaults: UserDefaults = .standard,
+        cacheDirectory: URL? = nil,
+        downloadsDirectory: URL? = nil,
+        autoConnect: Bool = true,
+        client: (any ScanFetching)?
     ) {
         self.defaults = defaults
         self.hostInput = defaults.string(forKey: Self.hostKey) ?? ""
@@ -50,6 +77,7 @@ public final class AppModel: ObservableObject {
         self.downloadsDirectory = downloadsDirectory
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        self.client = client
 
         if autoConnect, !hostInput.isEmpty {
             Task { await connect() }
@@ -212,7 +240,7 @@ public final class AppModel: ObservableObject {
     }
 }
 
-private final class ExtensionEnforcingPanelDelegate: NSObject, NSOpenSavePanelDelegate {
+final class ExtensionEnforcingPanelDelegate: NSObject, NSOpenSavePanelDelegate {
     let requiredExtension: String
 
     init(requiredExtension: String) {

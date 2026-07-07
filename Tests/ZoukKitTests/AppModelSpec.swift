@@ -61,10 +61,12 @@ final class AppModelSpec: AsyncSpec {
                 // nonisolated(unsafe): Quick serializes beforeEach/it so there's no real race, but the compiler can't see that.
                 nonisolated(unsafe) var model: AppModel!
                 nonisolated(unsafe) var scan: ScanEntry!
+                nonisolated(unsafe) var fakeClient: FakeScanClient!
 
                 beforeEach {
                     await MainActor.run {
-                        model = AppModel(defaults: makeEphemeralDefaults(), autoConnect: false)
+                        fakeClient = FakeScanClient()
+                        model = AppModel(defaults: makeEphemeralDefaults(), autoConnect: false, client: fakeClient)
                         scan = ScanEntry(
                             name: "1782420815.pdf",
                             size: 7,
@@ -137,6 +139,39 @@ final class AppModelSpec: AsyncSpec {
 
                             expect(model.selectedScanID).to(equal(scan.id))
                             expect(model.pendingDelete).to(equal(scan))
+                        }
+                    }
+                }
+
+                describe("#delete(_:)") {
+                    justBeforeEach { await model.delete(scan) }
+
+                    context("when the server confirms the delete") {
+                        beforeEach {
+                            fakeClient.deleteHandler = { _ in }
+                            await MainActor.run { model.selectedScanID = scan.id }
+                        }
+
+                        it("removes the scan from scans and clears the selection") {
+                            await MainActor.run {
+                                expect(model.scans).to(beEmpty())
+                                expect(model.selectedScanID).to(beNil())
+                            }
+                        }
+                    }
+
+                    context("when the server rejects the delete") {
+                        beforeEach {
+                            fakeClient.deleteHandler = { _ in throw URLError(.unknown) }
+                            await MainActor.run { model.state = .connected }
+                        }
+
+                        it("leaves scans and state untouched, and clears the failure flash afterward") {
+                            await MainActor.run {
+                                expect(model.scans).to(equal([scan]))
+                                expect(model.state).to(equal(.connected))
+                                expect(model.savingMessage).to(beNil())
+                            }
                         }
                     }
                 }

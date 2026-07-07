@@ -113,6 +113,14 @@ final class ScanEntrySpec: QuickSpec {
                             expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 day"))
                         }
                     }
+
+                    context("one day earlier") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(-86400) }
+
+                        it("displays \"in 1 day\" rather than stripping a trailing \" ago\" that isn't there") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("in 1 day"))
+                        }
+                    }
                 }
             }
         }

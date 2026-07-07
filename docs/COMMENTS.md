@@ -41,6 +41,31 @@ SF Symbol rather than a blank space if it's ever missing.
 
 ## Sources/ZoukKit/AppModel.swift
 
+### `ScanFetching` (protocol) and `extension ScanClient: ScanFetching`
+Test seam only, mirroring `ScanHTTPClient`/`FakeHTTPClient` one layer up:
+`AppModel` used to hold a concrete `ScanClient?`, which meant `delete(_:)`,
+`thumbnail(for:)`, and the download paths could only be exercised through
+a real network round-trip via `connect()` -- `AppModel` is `final`, so
+there was no way to subclass it for a test double, and `ScanClient` is a
+concrete `actor`, so there was nothing to fake either. This protocol
+covers just the four methods `AppModel` actually calls
+(`fetchScans()`/`cachedFile(for:in:)`/`save(_:to:cacheDirectory:)`/
+`delete(_:)`); `ScanClient` conforms via an empty extension since its
+signatures already match. `: Sendable` for the same reason
+`ScanHTTPClient` is -- an instance conforming to this crosses from
+whatever calls it into `AppModel`'s `@MainActor` isolation, the same as
+`ScanHTTPClient` instances cross into the `ScanClient` actor. See
+`FakeScanClient` in ZoukKitTests for the test double.
+
+### `AppModel.init`
+Split into a `public convenience init` (unchanged public surface) that
+delegates to an internal designated `init` taking an extra
+`client: (any ScanFetching)?` parameter with no default value. No default
+is deliberate: giving both initializers a fully-defaulted `client` would
+make `AppModel()` ambiguous between them. Tests construct via the
+internal initializer directly (reachable through `@testable import`) to
+inject a `FakeScanClient` without ever calling `connect()`.
+
 ### `AppModel` (class)
 Drives the whole app: remembers the last host the user typed in, opens
 the host-entry screen until a connection succeeds, then holds the scan

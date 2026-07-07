@@ -64,6 +64,7 @@ final class ScanClientSpec: AsyncSpec {
                 var fakeSession: FakeHTTPClient!
                 var client: ScanClient!
                 var cacheDirectory: URL!
+                var local: URL!
 
                 beforeEach {
                     fakeSession = FakeHTTPClient()
@@ -76,10 +77,11 @@ final class ScanClientSpec: AsyncSpec {
                     try? FileManager.default.removeItem(at: cacheDirectory)
                 }
 
+                justBeforeEach { local = try await client.cachedFile(for: scan, in: cacheDirectory) }
+
                 context("when the file isn't cached yet") {
                     let bytes = Data("pdf bytes".utf8)
                     var requestedURL: URL!
-                    var local: URL!
 
                     beforeEach {
                         fakeSession.downloadHandler = { url in
@@ -89,7 +91,6 @@ final class ScanClientSpec: AsyncSpec {
                             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
                             return (tempURL, response)
                         }
-                        local = try await client.cachedFile(for: scan, in: cacheDirectory)
                     }
 
                     it("downloads from scan.path resolved against baseURL") {
@@ -105,15 +106,12 @@ final class ScanClientSpec: AsyncSpec {
                 context("when the file is already cached and its size matches scan.size") {
                     // Matches scan.size (7) so cachedFile trusts the cache; see the mismatch context below.
                     let existingBytes = Data("is-here".utf8)
-                    var local: URL!
 
                     beforeEach {
                         try! FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
                         try! existingBytes.write(to: cacheDirectory.appendingPathComponent(scan.name))
                         // Tripwire: a call here would throw and fail the test if the short-circuit logic ever regressed.
                         fakeSession.downloadHandler = { _ in throw URLError(.unknown) }
-
-                        local = try await client.cachedFile(for: scan, in: cacheDirectory)
                     }
 
                     it("returns the already-cached file without downloading again") {
@@ -126,7 +124,6 @@ final class ScanClientSpec: AsyncSpec {
                     let staleBytes = Data("stale, wrong file entirely".utf8)
                     let freshBytes = Data("pdf bytes".utf8)
                     var requestedURL: URL!
-                    var local: URL!
 
                     beforeEach {
                         try! FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
@@ -139,8 +136,6 @@ final class ScanClientSpec: AsyncSpec {
                             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
                             return (tempURL, response)
                         }
-
-                        local = try await client.cachedFile(for: scan, in: cacheDirectory)
                     }
 
                     it("re-downloads from scan.path instead of trusting the stale cache") {
@@ -205,6 +200,7 @@ final class ScanClientSpec: AsyncSpec {
                 var client: ScanClient!
                 var cacheDirectory: URL!
                 var destination: URL!
+                var saved: URL!
                 let bytes = Data("pdf bytes".utf8)
 
                 beforeEach {
@@ -228,10 +224,9 @@ final class ScanClientSpec: AsyncSpec {
                 }
                 afterEach { try? FileManager.default.removeItem(at: cacheDirectory.deletingLastPathComponent()) }
 
-                context("when destination has no existing file") {
-                    var saved: URL!
-                    beforeEach { saved = try await client.save(scan, to: destination, cacheDirectory: cacheDirectory) }
+                justBeforeEach { saved = try await client.save(scan, to: destination, cacheDirectory: cacheDirectory) }
 
+                context("when destination has no existing file") {
                     it("returns destination") {
                         expect(saved).to(equal(destination))
                     }
@@ -244,11 +239,51 @@ final class ScanClientSpec: AsyncSpec {
                 context("when destination already has a different file") {
                     beforeEach {
                         try! Data("stale".utf8).write(to: destination)
-                        _ = try await client.save(scan, to: destination, cacheDirectory: cacheDirectory)
                     }
 
                     it("overwrites it with the cached scan's bytes") {
                         expect(FileManager.default.contents(atPath: destination.path)).to(equal(bytes))
+                    }
+                }
+            }
+
+            describe("#uniqueDestination(for:in:)") {
+                var directory: URL!
+                var destination: URL!
+
+                beforeEach {
+                    directory = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("zouk-tests-\(UUID().uuidString)", isDirectory: true)
+                    try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                }
+
+                afterEach { try? FileManager.default.removeItem(at: directory) }
+
+                justBeforeEach { destination = ScanClient.uniqueDestination(for: "scan.pdf", in: directory) }
+
+                context("when nothing exists at that name yet") {
+                    it("returns the name unchanged") {
+                        expect(destination).to(equal(directory.appendingPathComponent("scan.pdf")))
+                    }
+                }
+
+                context("when \"scan.pdf\" already exists") {
+                    beforeEach {
+                        try! Data().write(to: directory.appendingPathComponent("scan.pdf"))
+                    }
+
+                    it("returns \"scan (1).pdf\"") {
+                        expect(destination).to(equal(directory.appendingPathComponent("scan (1).pdf")))
+                    }
+
+                    context("and \"scan (1).pdf\" also already exists") {
+                        beforeEach {
+                            try! Data().write(to: directory.appendingPathComponent("scan (1).pdf"))
+                        }
+
+                        it("returns \"scan (2).pdf\"") {
+                            expect(destination).to(equal(directory.appendingPathComponent("scan (2).pdf")))
+                        }
                     }
                 }
             }
