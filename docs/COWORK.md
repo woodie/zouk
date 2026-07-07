@@ -596,6 +596,20 @@ make bundle    # what `make run` uses internally; just the .app, no launch
 make xcode     # open Package.swift in Xcode directly
 ```
 
+## Comment convention (established this session)
+
+Explanatory comments -- anything that would otherwise be a multi-line
+`///` doc comment or a multi-line `//` note -- live in `docs/COMMENTS.md`
+instead, organized by file and then by the type/property/function they're
+about. Source keeps at most one short line at any given spot, and only
+where the code genuinely needs a pointer right there (a real gotcha, not
+general documentation); that line doesn't need to say "see
+docs/COMMENTS.md" -- treat that file as expected reading alongside the
+code, the same way `docs/COWORK.md` itself already is. Don't reintroduce
+multi-line comment blocks in Swift files going forward: a one-liner in
+code if it's truly needed, anything longer goes in `docs/COMMENTS.md`
+under a heading for the relevant file/symbol.
+
 ## Layout
 
 - `Sources/ZoukKit` -- model (`AppModel`), networking (`ScanClient`),
@@ -617,6 +631,8 @@ make xcode     # open Package.swift in Xcode directly
   an automated suite. Revisit (e.g. snapshot testing or ViewInspector)
   only if that stops being true.
 - `docs/DELIVERY.md` -- how to cut and hand off a build.
+- `docs/COMMENTS.md` -- rationale/history extracted from source comments;
+  see "Comment convention" above.
 - `docs/COWORK.md` -- this file.
 - `.github/workflows/CI.yml` -- runs `make build`/`make test` on macOS
   for every push/PR to `main`.

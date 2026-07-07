@@ -1,14 +1,7 @@
 import Foundation
 @testable import ZoukKit
 
-/// Fake ScanHTTPClient for ScanClientSpec -- lets tests call fetchScans()/
-/// cachedFile(for:in:)/delete(_:) directly without touching the real
-/// network. Set dataHandler/downloadHandler/requestHandler per test; an
-/// unset handler throws, same as a real network failure would.
-///
-/// @unchecked Sendable: each test builds and configures its own instance
-/// before handing it to a single ScanClient actor, so there's no shared
-/// mutable state across concurrency domains in practice.
+// @unchecked Sendable: each test owns its own instance before handing it to one ScanClient actor.
 final class FakeHTTPClient: ScanHTTPClient, @unchecked Sendable {
     var dataHandler: ((URL) throws -> (Data, URLResponse))?
     var downloadHandler: ((URL) throws -> (URL, URLResponse))?

@@ -55,29 +55,10 @@ final class AppModelSpec: AsyncSpec {
                 }
             }
 
-            // AppModel is @MainActor, so the specs below need Quick's async
-            // DSL -- plain QuickSpec's `it` only accepts a synchronous
-            // closure (Quick 7 gates async/await support behind the
-            // AsyncSpec base class this file uses instead; see
-            // Quick/Documentation/en-us/AsyncAwait.md). beforeEach/it hop to
-            // the main actor via `await MainActor.run { ... }`, the pattern
-            // that doc recommends for running synchronous, MainActor-bound
-            // code from an otherwise-async example -- mirrors the
-            // `@MainActor func test...()` isolation the old XCTest cases
-            // used, just expressed as an explicit hop instead of a function
-            // attribute.
+            // AsyncSpec (not QuickSpec) is needed since AppModel is @MainActor.
 
             context("with a connected model showing one scan") {
-                // beforeEach/it each hop onto the main actor independently
-                // (see the comment above), so these two vars are written and
-                // read from a series of separate `MainActor.run` closures
-                // rather than one continuous isolated scope. Quick never
-                // runs more than one of those closures at a time for a given
-                // example -- beforeEach always finishes before its it
-                // starts -- so there's no actual race, but the compiler has
-                // no way to know that about a third-party library's
-                // execution order. nonisolated(unsafe) says exactly that:
-                // the isolation checker can't verify this is safe, but it is.
+                // nonisolated(unsafe): Quick serializes beforeEach/it so there's no real race, but the compiler can't see that.
                 nonisolated(unsafe) var model: AppModel!
                 nonisolated(unsafe) var scan: ScanEntry!
 
@@ -95,9 +76,6 @@ final class AppModelSpec: AsyncSpec {
                 }
 
                 describe("#toggle(_:)") {
-                    // Click-to-select / click-again-to-deselect, and that
-                    // selectedScan looks the selected id back up in the
-                    // current scan list.
                     it("selects then deselects the same scan") {
                         await MainActor.run {
                             model.toggle(scan)
@@ -111,9 +89,6 @@ final class AppModelSpec: AsyncSpec {
                     }
 
                     context("with a savedMessage lingering from a previous open(_:)") {
-                        // The footer can only show one thing at a time: a
-                        // fresh selection should take over from a lingering
-                        // "saved to Downloads" message, not show both.
                         beforeEach {
                             await MainActor.run {
                                 model.savedMessage = "1782420815.pdf saved to Downloads."
@@ -143,13 +118,7 @@ final class AppModelSpec: AsyncSpec {
                 }
 
                 describe("#requestDelete(_:)") {
-                    // The footer's trash button is the only caller of this --
-                    // it's what arms ScanGridView's .confirmationDialog. The
-                    // right-click "Move to Trash" item deliberately skips this
-                    // and calls delete(_:) directly with no confirmation, so
-                    // it's out of scope here; see AppModel.requestDelete(_:)'s
-                    // doc comment for why the two trash triggers behave
-                    // differently on purpose.
+                    // Only the footer trash button calls this; right-click "Move to Trash" skips confirmation entirely.
                     it("selects the scan and arms pendingDelete for it") {
                         await MainActor.run {
                             model.requestDelete(scan)

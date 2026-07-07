@@ -14,11 +14,6 @@ public enum ScanClientError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Just the three URLSession calls ScanClient needs, as a protocol so tests
-/// can inject a fake instead of hitting the real network (see
-/// FakeHTTPClient in ZoukKitTests). data(for:) is the odd one out -- it
-/// takes a URLRequest rather than a bare URL, since delete(_:) needs to set
-/// an HTTP method other than GET.
 public protocol ScanHTTPClient: Sendable {
     func data(from url: URL) async throws -> (Data, URLResponse)
     func download(from url: URL) async throws -> (URL, URLResponse)
@@ -26,11 +21,7 @@ public protocol ScanHTTPClient: Sendable {
 }
 
 extension URLSession: ScanHTTPClient {
-    // URLSession's own data(from:)/download(from:)/data(for:) all take a
-    // trailing `delegate:` parameter with a default value -- a default
-    // value doesn't make a method's signature match a protocol requirement
-    // that omits the parameter outright, so these forward explicitly
-    // instead of conforming "for free".
+    // Forwards explicitly; a default delegate: param doesn't satisfy the protocol requirement.
     public func data(from url: URL) async throws -> (Data, URLResponse) {
         try await data(from: url, delegate: nil)
     }
@@ -44,21 +35,10 @@ extension URLSession: ScanHTTPClient {
     }
 }
 
-/// Talks to lambada-web's (or scandalous's) HTTP API: GET /files.json for
-/// the listing, GET /download/:filename for the bytes. Downloaded files are cached on
-/// disk by name (server-generated, supposedly immutable and never reused --
-/// see ScanEntry) so a file fetched once to build a thumbnail is never
-/// fetched twice when the user then clicks Download. `cachedFile(for:in:)`
-/// double-checks that assumption against `scan.size` rather than trusting
-/// it blindly -- see that method's doc comment.
 public actor ScanClient {
     public let baseURL: URL
     private let session: any ScanHTTPClient
 
-    /// `session` defaults to `.shared` for real use; tests inject a fake
-    /// ScanHTTPClient (see FakeHTTPClient in ZoukKitTests) so
-    /// `fetchScans()`/`cachedFile(for:in:)` can be called directly without
-    /// touching the real network.
     public init(baseURL: URL, session: any ScanHTTPClient = URLSession.shared) {
         self.baseURL = baseURL
         self.session = session
@@ -71,24 +51,7 @@ public actor ScanClient {
         return try JSONDecoder().decode([ScanEntry].self, from: data)
     }
 
-    /// Returns a local file URL for `scan`, downloading into `cacheDirectory`
-    /// only if it isn't already there *and matching `scan.size`*.
-    ///
-    /// The cache is keyed purely by `scan.name`, on the assumption
-    /// (documented on `ScanEntry`) that the server never reuses a name.
-    /// That assumption isn't actually enforced anywhere -- a server bug,
-    /// or a name collision from outside zouk entirely (as happened during
-    /// testing: a same-named file dropped directly into the server's
-    /// directory), would otherwise make this silently and permanently
-    /// serve the *old* file's bytes under the new entry's name, with
-    /// nothing on screen to suggest anything's wrong beyond a thumbnail
-    /// that looks like the wrong file. Comparing the cached file's actual
-    /// size on disk to the size the server just reported for this name
-    /// catches that case and re-downloads instead of trusting stale
-    /// bytes. It's not foolproof (two genuinely different files could
-    /// happen to be the same size), but the listing API doesn't give us
-    /// anything stronger than size/time to check against, and this is
-    /// already a strict improvement over no check at all.
+    // Re-downloads on a scan.size mismatch instead of trusting a stale same-named cache entry.
     @discardableResult
     public func cachedFile(for scan: ScanEntry, in cacheDirectory: URL) async throws -> URL {
         let local = cacheDirectory.appendingPathComponent(scan.name)
@@ -109,12 +72,6 @@ public actor ScanClient {
         return local
     }
 
-    /// Copies the (possibly already-cached) file straight to
-    /// `destination`, whatever name and folder the caller chose for it --
-    /// in practice, an NSSavePanel the caller already ran. No Finder-style
-    /// de-dup naming here: the panel already resolved any "replace this
-    /// file?" question before this is ever called, so this just writes
-    /// to exactly the URL it's given.
     @discardableResult
     public func save(_ scan: ScanEntry, to destination: URL, cacheDirectory: URL) async throws -> URL {
         let cached = try await cachedFile(for: scan, in: cacheDirectory)
@@ -125,13 +82,7 @@ public actor ScanClient {
         return destination
     }
 
-    /// Deletes `scan` from the server: DELETE on the exact same
-    /// server-relative path (`scan.path`) GET already uses to download it.
-    /// lambada-web registers both verbs on the same "/download/:filename"
-    /// resource rather than a separate "/delete/:filename" route, so this
-    /// only changes the HTTP method, not the URL. Doesn't touch the local
-    /// cache or AppModel's `scans` array -- AppModel.delete(_:) does that
-    /// on success.
+    // DELETE on the same path GET uses to download; lambada-web shares one route for both verbs.
     public func delete(_ scan: ScanEntry) async throws {
         guard let remote = URL(string: scan.path, relativeTo: baseURL) else {
             throw ScanClientError.invalidResponse
@@ -142,9 +93,7 @@ public actor ScanClient {
         try Self.checkOK(response)
     }
 
-    /// Finder-style de-duplication: downloading "scan.pdf" a second time
-    /// produces "scan (1).pdf", then "scan (2).pdf", and so on, instead of
-    /// silently overwriting the file already in Downloads.
+    // Finder-style de-dup naming: "scan.pdf" -> "scan (1).pdf" instead of overwriting.
     nonisolated static func uniqueDestination(for filename: String, in directory: URL) -> URL {
         let base = (filename as NSString).deletingPathExtension
         let fileExtension = (filename as NSString).pathExtension
@@ -163,11 +112,7 @@ public actor ScanClient {
         guard (200..<300).contains(http.statusCode) else { throw ScanClientError.server(http.statusCode) }
     }
 
-    /// Whether the file already sitting at `local` is plausibly still
-    /// *this* scan's bytes, not a leftover from some earlier, unrelated
-    /// file that happened to land under the same name. Unreadable
-    /// attributes count as a mismatch -- safer to re-download than to
-    /// serve a file we can't even confirm the size of.
+    // Unreadable attributes count as a mismatch; safer to re-download.
     private static func cachedSizeMatches(_ scan: ScanEntry, at local: URL) -> Bool {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: local.path),
               let cachedSize = attributes[.size] as? Int

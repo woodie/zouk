@@ -3,10 +3,6 @@ import Combine
 import ImageIO
 import SwiftUI
 
-/// Frame-by-frame playback of `RunningDog.gif` (an 8-frame run cycle,
-/// already flipped to face left). ImageIO decodes the GIF directly so we
-/// don't need to ship a separate PNG per frame or pull in a third-party
-/// GIF-rendering dependency just to animate eight small images.
 enum RunningDogAnimation {
     static let frames: [NSImage] = {
         guard
@@ -21,15 +17,9 @@ enum RunningDogAnimation {
         }
     }()
 
-    /// Matches the source GIF's 100ms-per-frame timing rather than reading
-    /// it back out of the file's per-frame metadata -- all eight frames
-    /// share the same duration, so there's nothing per-frame to preserve.
     static let frameInterval: TimeInterval = 0.1
 }
 
-/// Loops `RunningDogAnimation.frames` on a timer. Falls back to the plain
-/// (static) app icon if the GIF somehow failed to decode, so ConnectingView
-/// always has something to show.
 struct RunningDogView: View {
     @State private var frameIndex = 0
 

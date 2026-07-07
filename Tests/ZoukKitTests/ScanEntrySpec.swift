@@ -70,10 +70,7 @@ final class ScanEntrySpec: QuickSpec {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
                     it("is non-nil and doesn't include a trailing \" ago\"") {
-                        // The delete confirmation dialog (ScanGridView) appends
-                        // " ago?" itself -- matching lambada-web/scandalous's
-                        // timeAgo template func, which returns just the
-                        // duration for the same reason.
+                        // ScanGridView appends " ago?" itself, matching lambada-web/scandalous's timeAgo template func.
                         expect(scan.timeAgo).toNot(beNil())
                         expect(scan.timeAgo).toNot(endWith(" ago"))
                     }
@@ -89,13 +86,7 @@ final class ScanEntrySpec: QuickSpec {
             }
 
             describe("#timeAgo(relativeTo:)") {
-                // Regression spec for the bug woodie caught 2026-07-02: deleting
-                // a scan seconds after it arrived showed "Delete this scan from
-                // 15 seconds ago" in zouk, while scandalous/lambada-web both
-                // showed "less than a minute ago" for the same age -- see
-                // docs/COWORK.md. Deterministic (fixed `now` passed in) rather
-                // than depending on the real clock, unlike the #timeAgo spec
-                // above.
+                // Regression spec for the 2026-07-02 sub-30-second clamping bug.
                 let downloadedAtString = "2026-07-02T12:00:00Z"
                 var scan: ScanEntry!
                 var downloadedAt: Date!

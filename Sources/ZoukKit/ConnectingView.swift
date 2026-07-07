@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Shown while `AppModel.connect()` is in flight -- the automatic reconnect
-/// attempt on launch and a manual retry both pass through here -- so
-/// there's something more alive on screen than a static form while we wait
-/// on the network.
 struct ConnectingView: View {
     var body: some View {
         VStack(spacing: 16) {

@@ -103,20 +103,14 @@ final class ScanClientSpec: AsyncSpec {
                 }
 
                 context("when the file is already cached and its size matches scan.size") {
-                    // Exactly scan.size (7) bytes -- cachedFile compares
-                    // against that before trusting the cache; see the
-                    // mismatch context below for what happens when it
-                    // doesn't match.
+                    // Matches scan.size (7) so cachedFile trusts the cache; see the mismatch context below.
                     let existingBytes = Data("is-here".utf8)
                     var local: URL!
 
                     beforeEach {
                         try! FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
                         try! existingBytes.write(to: cacheDirectory.appendingPathComponent(scan.name))
-                        // Tripwire: if cachedFile ever stopped short-circuiting
-                        // on an existing file, this handler being called would
-                        // throw and fail the test below instead of silently
-                        // passing for the wrong reason.
+                        // Tripwire: a call here would throw and fail the test if the short-circuit logic ever regressed.
                         fakeSession.downloadHandler = { _ in throw URLError(.unknown) }
 
                         local = try await client.cachedFile(for: scan, in: cacheDirectory)
@@ -128,14 +122,7 @@ final class ScanClientSpec: AsyncSpec {
                 }
 
                 context("when a same-named file is cached but its size doesn't match scan.size") {
-                    // Regression test: a file landing under a name that's
-                    // already in zouk's local cache (whether from a server
-                    // bug or, as found during manual testing, someone
-                    // dropping a same-named file directly into the server's
-                    // directory) used to be served from the stale cache
-                    // forever -- e.g. a grid cell silently showing the old
-                    // file's thumbnail for the new entry. cachedFile now
-                    // notices the size mismatch and re-downloads instead.
+                    // Regression test for the stale-cache bug (ScanClient.cachedFile(for:in:)).
                     let staleBytes = Data("stale, wrong file entirely".utf8)
                     let freshBytes = Data("pdf bytes".utf8)
                     var requestedURL: URL!

@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// First screen the user sees, and the one they come back to whenever a
-/// connect attempt fails (ContentView routes there any time AppModel isn't
-/// connected and isn't actively connecting -- see ConnectingView for the
-/// in-flight state). Remembers the last host: AppModel persists it to
-/// UserDefaults on successful connect and prefills it here next launch.
 struct HostEntryView: View {
     @ObservedObject var model: AppModel
 
