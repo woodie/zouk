@@ -76,15 +76,25 @@ final class AppModelSpec: AsyncSpec {
                 }
 
                 describe("#toggle(_:)") {
-                    it("selects then deselects the same scan") {
-                        await MainActor.run {
-                            model.toggle(scan)
-                            expect(model.selectedScanID).to(equal(scan.id))
-                            expect(model.selectedScan).to(equal(scan))
+                    context("when toggled once") {
+                        beforeEach { await MainActor.run { model.toggle(scan) } }
 
-                            model.toggle(scan)
-                            expect(model.selectedScanID).to(beNil())
-                            expect(model.selectedScan).to(beNil())
+                        it("selects the scan") {
+                            await MainActor.run {
+                                expect(model.selectedScanID).to(equal(scan.id))
+                                expect(model.selectedScan).to(equal(scan))
+                            }
+                        }
+
+                        context("when toggled again") {
+                            beforeEach { await MainActor.run { model.toggle(scan) } }
+
+                            it("deselects the scan") {
+                                await MainActor.run {
+                                    expect(model.selectedScanID).to(beNil())
+                                    expect(model.selectedScan).to(beNil())
+                                }
+                            }
                         }
                     }
 
@@ -106,13 +116,15 @@ final class AppModelSpec: AsyncSpec {
                 }
 
                 describe("#changeServer()") {
-                    it("clears the selection and the scan list") {
-                        await MainActor.run {
-                            model.toggle(scan)
-                            model.changeServer()
+                    context("with a scan selected") {
+                        beforeEach { await MainActor.run { model.toggle(scan) } }
 
-                            expect(model.selectedScanID).to(beNil())
-                            expect(model.scans).to(beEmpty())
+                        it("clears the selection and the scan list") {
+                            await MainActor.run {
+                                model.changeServer()
+                                expect(model.selectedScanID).to(beNil())
+                                expect(model.scans).to(beEmpty())
+                            }
                         }
                     }
                 }

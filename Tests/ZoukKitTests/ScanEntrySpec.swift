@@ -63,16 +63,15 @@ final class ScanEntrySpec: QuickSpec {
                 }
             }
 
-            describe("#timeAgo") {
+            describe("#timeAgo(relativeTo:)") {
                 var scan: ScanEntry!
 
                 context("with a valid timestamp") {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
                     it("is non-nil and doesn't include a trailing \" ago\"") {
-                        // ScanGridView appends " ago?" itself, matching lambada-web/scandalous's timeAgo template func.
-                        expect(scan.timeAgo).toNot(beNil())
-                        expect(scan.timeAgo).toNot(endWith(" ago"))
+                        expect(scan.timeAgo(relativeTo: Date())).toNot(beNil())
+                        expect(scan.timeAgo(relativeTo: Date())).toNot(endWith(" ago"))
                     }
                 }
 
@@ -80,35 +79,40 @@ final class ScanEntrySpec: QuickSpec {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: "invalid", path: path) }
 
                     it("is nil") {
-                        expect(scan.timeAgo).to(beNil())
+                        expect(scan.timeAgo(relativeTo: Date())).to(beNil())
                     }
                 }
-            }
 
-            describe("#timeAgo(relativeTo:)") {
-                // Regression spec for the 2026-07-02 sub-30-second clamping bug.
-                let downloadedAtString = "2026-07-02T12:00:00Z"
-                var scan: ScanEntry!
-                var downloadedAt: Date!
+                context("with an entry downloaded on 2026-07-02") {
+                    let downloadedString = "2026-07-02T12:00:00Z"
+                    let downloadedDate = ISO8601DateFormatter().date(from: downloadedString)!
+                    var timeNow: Date!
 
-                beforeEach {
-                    scan = ScanEntry(name: name, size: size, time: downloadedAtString, path: path)
-                    downloadedAt = ISO8601DateFormatter().date(from: downloadedAtString)
-                }
+                    beforeEach { scan = ScanEntry(name: name, size: size, time: downloadedString, path: path) }
 
-                it("clamps sub-30-second ages to \"less than a minute\", matching scandalous/lambada-web") {
-                    let fifteenSecondsLater = downloadedAt.addingTimeInterval(15)
-                    expect(scan.timeAgo(relativeTo: fifteenSecondsLater)).to(equal("less than a minute"))
-                }
+                    context("twenty seconds later") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(20) }
 
-                it("still clamps right at the 29-second boundary") {
-                    let twentyNineSecondsLater = downloadedAt.addingTimeInterval(29)
-                    expect(scan.timeAgo(relativeTo: twentyNineSecondsLater)).to(equal("less than a minute"))
-                }
+                        it("displays less than a minute") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("less than a minute"))
+                        }
+                    }
 
-                it("no longer clamps once 30 seconds have passed") {
-                    let thirtySecondsLater = downloadedAt.addingTimeInterval(30)
-                    expect(scan.timeAgo(relativeTo: thirtySecondsLater)).toNot(equal("less than a minute"))
+                    context("eighty seconds later") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(80) }
+
+                        it("displays 1 minute") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 minute"))
+                        }
+                    }
+
+                    context("one day later") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(86400) }
+
+                        it("displays 1 day") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 day"))
+                        }
+                    }
                 }
             }
         }

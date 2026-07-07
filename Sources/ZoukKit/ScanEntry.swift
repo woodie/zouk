@@ -1,6 +1,5 @@
 import Foundation
 
-// name: server-generated, assumed-unique timestamp filename. path: server-relative.
 public struct ScanEntry: Codable, Identifiable, Equatable {
     public let name: String
     public let size: Int
@@ -33,21 +32,15 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         return formatter.string(from: downloadedAt)
     }
 
-    // Matches lambada-web/scandalous's timeAgo wording for the delete-confirm dialog.
-    public var timeAgo: String? {
-        timeAgo(relativeTo: Date())
-    }
-
+    // Emulate DateHelper.time_ago_in_words()
     public func timeAgo(relativeTo now: Date) -> String? {
         guard let downloadedAt else { return nil }
-        // Sub-30-second durations are clamped to "less than a minute", matching scandalous/lambada-web.
         if abs(now.timeIntervalSince(downloadedAt)) < 30 {
             return "less than a minute"
         }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         let formatted = formatter.localizedString(for: downloadedAt, relativeTo: now)
-        // Strip trailing " ago" so callers control placement, matching lambada-web's template func.
         return formatted.hasSuffix(" ago") ? String(formatted.dropLast(4)) : formatted
     }
 }

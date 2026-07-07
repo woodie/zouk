@@ -354,12 +354,9 @@ file that happened to land under the same name.
 ## Sources/ZoukKit/ScanEntry.swift
 
 ### `ScanEntry` (struct)
-Kept a one-line comment in place: "name is a server-generated,
-assumed-unique timestamp filename; path is server-relative (renamed
-from url)."
-
-Full history: mirrors one entry from the `/files.json` endpoint served
-by lambada-web (or scandalous, its Ruby predecessor). `name` is a
+No comment kept in source; the struct is judged self-explanatory now.
+History: mirrors one entry from the `/files.json` endpoint served by
+lambada-web (or scandalous, its Ruby predecessor). `name` is a
 server-generated Unix-timestamp filename like "1779907271.pdf" -- never
 user input -- so it's safe to use directly as a local file/cache name
 with no sanitization. `path` is a server-relative download path (e.g.
@@ -372,28 +369,41 @@ Finder-style relative timestamp ("Today at 4:11 PM", "Yesterday at 9:02
 AM", or a plain date once it's further back) instead of a bare calendar
 date -- matches how Finder's list view shows Date Modified.
 
-### `ScanEntry.timeAgo`
-"6 days ago"/"less than a minute ago"-style relative age, without the
-"ago" suffix -- matches lambada-web/scandalous's own timeAgo/
-time_ago_in_words wording (both ultimately Rails'
-distance_of_time_in_words), used so the delete confirmation dialog
-(`ScanGridView`) reads the same way the web listing's own delete confirm
-does: "Delete this scan from &lt;timeAgo&gt; ago?". Uses the real
-current time -- see `timeAgo(relativeTo:)` for a version tests can pin
-to a fixed clock.
-
 ### `ScanEntry.timeAgo(relativeTo:)`
-Same as `timeAgo`, but takes an explicit "now" instead of reading the
-real clock, so a test can assert exact wording (e.g. "15 seconds before
-now" -> "less than a minute") deterministically.
+Kept a one-line comment in place: "Emulate DateHelper.time_ago_in_words()."
 
-Kept a one-line comment in place (sub-30-second clamp): "Sub-30-second
-durations are clamped to 'less than a minute', matching
-scandalous/lambada-web."
+History: originally had a no-arg `timeAgo` convenience property (real
+clock) alongside this explicit-`now` version (for deterministic tests).
+The convenience property was removed -- lambada's HTML templates always
+pass an explicit time to their `timeAgo`/`time_ago_in_words` helpers
+rather than reaching for "now" implicitly (see lambada's
+`docs/COWORK.md`, "Comment philosophy" step 4, and
+[lambada#15](https://github.com/woodie/lambada/issues/15) for the
+related discussion of `justincampbell/timeago`'s `FromTime` vs
+`FromDuration`), so `ScanEntry` was brought in line: every call site now
+passes `Date()` explicitly instead of zouk having its own implicit-clock
+convenience the Go/Ruby side doesn't.
 
-Kept a one-line comment in place (trailing " ago" strip): "Strips
-trailing ' ago' so callers control placement, matching lambada-web's
-template func."
+The sub-30-second clamp (`if abs(now.timeIntervalSince(downloadedAt)) <
+30 { return "less than a minute" }`) matches Rails' own threshold:
+`distance_of_time_in_words` rounds the gap to whole minutes
+(`(seconds / 60.0).round`), and Ruby rounds half away from zero, so 30
+seconds rounds to 1 minute, not 0 -- "less than a minute" only applies
+below 30 seconds, exactly where this clamp cuts over. `justincampbell/timeago`'s
+`FromDuration` hardcodes the identical `seconds < 30` check. This clamp
+also means `RelativeDateTimeFormatter` is never invoked for anything
+under 30 seconds, sidestepping any question of whether it'd render a
+near-zero gap as "now" (only a real possibility under `.named`
+`dateTimeStyle`, which this code doesn't set, but moot either way since
+the branch returns before the formatter ever sees that range).
+
+The trailing `" ago"` strip (`formatted.hasSuffix(" ago") ? ...`) exists
+because `RelativeDateTimeFormatter.localizedString(for:relativeTo:)`
+does not always end with " ago" -- only when `downloadedAt` is before
+`now`. If `downloadedAt` were ever in the future (clock skew, a
+malformed server timestamp), the formatter returns "in X..." instead,
+with no "ago" to strip -- hence checking `hasSuffix` rather than
+unconditionally dropping the last 4 characters.
 
 ## Sources/ZoukKit/ScanGridView.swift
 
