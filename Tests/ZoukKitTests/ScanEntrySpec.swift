@@ -7,7 +7,7 @@ final class ScanEntrySpec: QuickSpec {
     override class func spec() {
         describe("ScanEntry") {
             let name = "1779907271.pdf"
-            let size = 1_500_000
+            let size = 500_000
             let time = "2026-06-25T10:30:00-07:00"
             let path = "/download/\(name)"
 
@@ -37,7 +37,7 @@ final class ScanEntrySpec: QuickSpec {
                 beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
                 it("is human readable for a multi-megabyte file") {
-                    expect(scan.formattedSize).to(contain("MB"))
+                    expect(scan.formattedSize).to(contain("500 KB"))
                 }
             }
 
