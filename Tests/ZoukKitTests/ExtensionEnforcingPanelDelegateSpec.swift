@@ -16,10 +16,10 @@ final class ExtensionEnforcingPanelDelegateSpec: QuickSpec {
                 justBeforeEach { result = delegate.panel(NSObject(), userEnteredFilename: entered, confirmed: confirmed) }
 
                 context("while the user is still typing (confirmed: false)") {
-                    beforeEach { entered = "name.zip"; confirmed = false }
+                    beforeEach { confirmed = false; entered = "name.zip"; }
 
                     it("leaves the filename unchanged") {
-                        expect(result).to(equal("name.zip"))
+                        expect(result).to(equal(entered))
                     }
                 }
 
