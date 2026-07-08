@@ -50,7 +50,7 @@ struct ScanGridView: View {
         // presenting uses pendingDelete, not selectedScan; title mirrors the web listing's confirm() text.
         .confirmationDialog(
             model.pendingDelete.map {
-                "Delete this scan from \($0.timeAgo(relativeTo: Date()) ?? "an unknown time") ago?"
+                "Delete this scan from \($0.timeAgo(relativeTo: Date()) ?? "an unknown time")?"
             }
                 ?? "Delete this scan?",
             isPresented: Binding(

@@ -69,9 +69,9 @@ final class ScanEntrySpec: QuickSpec {
                 context("with a valid timestamp") {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
-                    it("is non-nil and doesn't include a trailing \" ago\"") {
+                    it("is non-nil and includes trailing \" ago\"") {
                         expect(scan.timeAgo(relativeTo: Date())).toNot(beNil())
-                        expect(scan.timeAgo(relativeTo: Date())).toNot(endWith(" ago"))
+                        expect(scan.timeAgo(relativeTo: Date())).to(endWith(" ago"))
                     }
                 }
 
@@ -83,42 +83,50 @@ final class ScanEntrySpec: QuickSpec {
                     }
                 }
 
-                context("with an entry downloaded on 2026-07-02") {
+                context("with files can be older/newer") {
                     let downloadedString = "2026-07-02T12:00:00Z"
                     let downloadedDate = ISO8601DateFormatter().date(from: downloadedString)!
                     var timeNow: Date!
 
                     beforeEach { scan = ScanEntry(name: name, size: size, time: downloadedString, path: path) }
 
-                    context("twenty seconds later") {
-                        beforeEach { timeNow = downloadedDate.addingTimeInterval(20) }
+                    context("just now") {
+                        beforeEach { timeNow = downloadedDate }
 
-                        it("displays less than a minute") {
-                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("less than a minute"))
+                        it("displays less than a minute ago") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("less than a minute ago"))
                         }
                     }
 
-                    context("eighty seconds later") {
-                        beforeEach { timeNow = downloadedDate.addingTimeInterval(80) }
+                    context("three minutes ago") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(3 * 60) }
 
-                        it("displays 1 minute") {
-                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 minute"))
+                        it("displays 3 minutes ago") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("3 minutes ago"))
                         }
                     }
 
-                    context("one day later") {
-                        beforeEach { timeNow = downloadedDate.addingTimeInterval(86400) }
+                    context("fifteen hours ago") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(15 * 60 * 60) }
 
-                        it("displays 1 day") {
-                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 day"))
+                        it("displays 15 hours ago") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("15 hours ago"))
                         }
                     }
 
-                    context("one day earlier") {
-                        beforeEach { timeNow = downloadedDate.addingTimeInterval(-86400) }
+                    context("thirty hours ago") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(30 * 60 * 60) }
 
-                        it("displays \"in 1 day\" rather than stripping a trailing \" ago\" that isn't there") {
-                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("in 1 day"))
+                        it("displays 1 day ago") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("1 day ago"))
+                        }
+                    }
+
+                    context("when files can be newer") {
+                        beforeEach { timeNow = downloadedDate.addingTimeInterval(-3 * 60) }
+
+                        it("displays in the future") {
+                            expect(scan.timeAgo(relativeTo: timeNow)).to(equal("in 3 minutes"))
                         }
                     }
                 }

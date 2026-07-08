@@ -32,15 +32,14 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         return formatter.string(from: downloadedAt)
     }
 
-    // Emulate DateHelper.time_ago_in_words()
+    // Emulate github.com/justincampbell/timeago
     public func timeAgo(relativeTo now: Date) -> String? {
         guard let downloadedAt else { return nil }
         if abs(now.timeIntervalSince(downloadedAt)) < 30 {
-            return "less than a minute"
+            return "less than a minute ago"
         }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        let formatted = formatter.localizedString(for: downloadedAt, relativeTo: now)
-        return formatted.hasSuffix(" ago") ? String(formatted.dropLast(4)) : formatted
+        return formatter.localizedString(for: downloadedAt, relativeTo: now)
     }
 }
