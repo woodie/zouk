@@ -78,7 +78,7 @@ struct ScanGridView: View {
                 if let date = scan.formattedDate {
                     Text(date)
                 }
-                Text(scan.formattedSize)
+                Text(scan.humanSize)
                 Button {
                     model.requestDelete(scan)
                 } label: {

@@ -19,7 +19,7 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         ISO8601DateFormatter().date(from: time)
     }
 
-    public var formattedSize: String {
+    public var humanSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
 
@@ -32,7 +32,7 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         return formatter.string(from: downloadedAt)
     }
 
-    // Emulate github.com/justincampbell/timeago
+    // Emulate github.com/woodie/humane NewTimeFormatter CollapseMinute
     public func timeAgo(relativeTo now: Date) -> String? {
         guard let downloadedAt else { return nil }
         if abs(now.timeIntervalSince(downloadedAt)) < 30 {

@@ -32,15 +32,6 @@ final class ScanEntrySpec: QuickSpec {
                 }
             }
 
-            describe("#formattedSize") {
-                var scan: ScanEntry!
-                beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
-
-                it("is human readable for a multi-megabyte file") {
-                    expect(scan.formattedSize).to(contain("500 KB"))
-                }
-            }
-
             describe("#downloadedAt and #formattedDate") {
                 var scan: ScanEntry!
 
@@ -60,6 +51,15 @@ final class ScanEntrySpec: QuickSpec {
                         expect(scan.downloadedAt).to(beNil())
                         expect(scan.formattedDate).to(beNil())
                     }
+                }
+            }
+
+            describe("#humanSize") {
+                var scan: ScanEntry!
+                beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
+
+                it("is human readable") {
+                    expect(scan.humanSize).to(contain("500 KB"))
                 }
             }
 
@@ -125,7 +125,7 @@ final class ScanEntrySpec: QuickSpec {
                     context("when files can be newer") {
                         beforeEach { timeNow = downloadedDate.addingTimeInterval(-3 * 60) }
 
-                        it("displays in the future") {
+                        it("displays in 3 minutes") {
                             expect(scan.timeAgo(relativeTo: timeNow)).to(equal("in 3 minutes"))
                         }
                     }
