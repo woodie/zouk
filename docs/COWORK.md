@@ -444,15 +444,18 @@ see `humane-swift/docs/COWORK.md` for that repo's own state. No
 `ScanEntrySpec.swift` changes were needed: none of its existing fixtures
 land in the 30-59-second gap the threshold fix affects.
 
-Made by inspection only per the sandbox limitation above -- needs `make
-test` confirmed on real hardware before this is trusted, same as
-everything else in this file.
+Made by inspection only per the sandbox limitation above; confirmed via a
+real `make test` on woodie's Mac -- 46/46 specs pass. Not exercised via
+`make run` against a live `lambada` server this round -- deliberately
+scoped to the automated suite; revisit with a live pass if `humane-swift`
+behavior is ever in question beyond what the specs cover.
 
 ## Next up
 
-Confirm the `humane-swift` integration above via `make build`/`make test`.
-Once `humane-swift` is tagged and pushed, switch `Package.swift`'s
-dependency from `path:` to a `from: "0.1.0"` version pin.
+`humane-swift` integration confirmed (46/46, see above). Once `humane-swift`'s
+`v0.1.0` is tagged and pushed (its own `docs/COWORK.md` has the status),
+switch `Package.swift`'s dependency from `path:` to a `from: "0.1.0"` version
+pin.
 
 Otherwise nothing else pending as of `v1.8.0`. This section used to list
 three items -- a README line on *why* zouk exists, a README line on *who
