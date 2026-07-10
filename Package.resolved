@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/woodie/humane-swift.git",
       "state" : {
-        "revision" : "18355b51653653a87c5ae0e715d9e4e5342d9dbb",
-        "version" : "0.1.0"
+        "revision" : "06e6c9c423e46bd10a44d177937272ad14ba6292",
+        "version" : "0.2.0"
       }
     },
     {
