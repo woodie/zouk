@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "humane-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/woodie/humane-swift.git",
+      "state" : {
+        "revision" : "18355b51653653a87c5ae0e715d9e4e5342d9dbb",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "nimble",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Quick/Nimble.git",

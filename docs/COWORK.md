@@ -452,12 +452,11 @@ behavior is ever in question beyond what the specs cover.
 
 ## Next up
 
-`humane-swift` integration confirmed (46/46, see above); `v0.1.0` is now tagged,
-pushed, and released (`github.com/woodie/humane-swift/releases/tag/v0.1.0`).
-`Package.swift` is pinned to it (`from: "0.1.0"`, no more local `path:`) --
-needs a `make build`/`make test` to confirm the real dependency resolves and
-still passes before trusting it over the `path:` version that was actually
-tested.
+`humane-swift` fully adopted: tagged/pushed/released as `v0.1.0`
+(`github.com/woodie/humane-swift/releases/tag/v0.1.0`), `Package.swift` pinned to it
+(`from: "0.1.0"`, no more local `path:`), confirmed via a real `make build`/`make
+test` resolving the published package from GitHub -- 46/46 pass, same as the `path:`
+version. Nothing pending on this thread.
 
 Otherwise nothing else pending as of `v1.8.0`. This section used to list
 three items -- a README line on *why* zouk exists, a README line on *who
