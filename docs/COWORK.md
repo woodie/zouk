@@ -458,6 +458,16 @@ behavior is ever in question beyond what the specs cover.
 test` resolving the published package from GitHub -- 46/46 pass, same as the `path:`
 version. Nothing pending on this thread.
 
+Not yet tagged as a new zouk release -- `Resources/Info.plist`'s
+`CFBundleShortVersionString` bumped `1.8.1` -> `1.9.0` (`CFBundleVersion`
+`9` -> `10`) to reflect the real behavior change (the `humane-swift`
+adoption, the "about" prefix, and the 30s/60s clamp fix), but not yet
+committed/tagged/pushed. `.github/workflows/release.yml` triggers on any
+`v*` tag push and handles build/codesign/notarize/zip/`.pkg`/GitHub
+Release/Homebrew-cask-bump automatically -- push `git tag -a v1.9.0 -m
+"v1.9.0" && git push --tags` once confirmed, no manual zip/pkg building
+needed.
+
 Otherwise nothing else pending as of `v1.8.0`. This section used to list
 three items -- a README line on *why* zouk exists, a README line on *who
 it's for*, and resuming the Developer ID Installer cert walkthrough -- all
