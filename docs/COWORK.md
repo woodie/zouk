@@ -420,14 +420,46 @@ pre-existing file, an input value); every `it` is a bare assertion.
 Made by inspection only per the sandbox limitation above; confirmed via
 a real `make test` on woodie's Mac -- 42/42 specs pass.
 
+## This session: adopted `humane-swift`, dropping the hand-rolled `humanSize`/`timeAgo`
+
+`ScanEntry.humanSize` and `timeAgo(relativeTo:)` had been directly wrapping
+`ByteCountFormatter`/`RelativeDateTimeFormatter` in this file, including a
+manually bolted-on `< 30`-second "less than a minute ago" clamp and (added
+this same session, before this entry) an "about"-prefix prototype for
+hour-plus buckets. Both are now `github.com/woodie/humane-swift`'s job:
+`ScanEntry.humanSize` calls `Humane.SizeFormatter().string(fromByteCount:)`,
+`timeAgo(relativeTo:)` calls `Humane.TimeFormatter(approximate:
+true).string(for:relativeTo:)`. This incidentally fixes a real drift bug --
+the hand-rolled clamp used 30 seconds, `humane`/`humane-ruby`'s actual
+default (and `humane-swift`'s `includeSeconds: false`) is 60 -- so anything
+30-59 seconds old now reads "less than a minute ago" instead of showing
+exact seconds, matching the other two languages for the first time.
+
+`Package.swift` points at `humane-swift` via `.package(path: "../humane-swift")`
+-- a local sibling-directory dependency, not a version pin, since
+`humane-swift` is tested (28/28 on real hardware) but its `v0.1.0` tag
+hasn't been pushed yet. Switch to `.package(url:
+"https://github.com/woodie/humane-swift.git", from: "0.1.0")` once it has --
+see `humane-swift/docs/COWORK.md` for that repo's own state. No
+`ScanEntrySpec.swift` changes were needed: none of its existing fixtures
+land in the 30-59-second gap the threshold fix affects.
+
+Made by inspection only per the sandbox limitation above -- needs `make
+test` confirmed on real hardware before this is trusted, same as
+everything else in this file.
+
 ## Next up
 
-Nothing pending as of `v1.8.0`. This section used to list three items --
-a README line on *why* zouk exists, a README line on *who it's for*, and
-resuming the Developer ID Installer cert walkthrough -- all three turned
-out to already be done (README's intro paragraph covers the first two
-almost verbatim; the Installer cert/`.pkg` work is covered in "This
-session: evaluating a `productbuild` `.pkg` installer" above), just
+Confirm the `humane-swift` integration above via `make build`/`make test`.
+Once `humane-swift` is tagged and pushed, switch `Package.swift`'s
+dependency from `path:` to a `from: "0.1.0"` version pin.
+
+Otherwise nothing else pending as of `v1.8.0`. This section used to list
+three items -- a README line on *why* zouk exists, a README line on *who
+it's for*, and resuming the Developer ID Installer cert walkthrough -- all
+three turned out to already be done (README's intro paragraph covers the
+first two almost verbatim; the Installer cert/`.pkg` work is covered in
+"This session: evaluating a `productbuild` `.pkg` installer" above), just
 never recorded here at the time. Cleaned up rather than left stale.
 
 ## Design conventions established so far (don't regress on these)

@@ -1,4 +1,5 @@
 import Foundation
+import Humane
 
 public struct ScanEntry: Codable, Identifiable, Equatable {
     public let name: String
@@ -20,7 +21,7 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     }
 
     public var humanSize: String {
-        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        Humane.SizeFormatter().string(fromByteCount: size)
     }
 
     public var formattedDate: String? {
@@ -32,14 +33,8 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         return formatter.string(from: downloadedAt)
     }
 
-    // Emulate github.com/woodie/humane NewTimeFormatter CollapseMinute
     public func timeAgo(relativeTo now: Date) -> String? {
         guard let downloadedAt else { return nil }
-        if abs(now.timeIntervalSince(downloadedAt)) < 30 {
-            return "less than a minute ago"
-        }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: downloadedAt, relativeTo: now)
+        return Humane.TimeFormatter(approximate: true).string(for: downloadedAt, relativeTo: now)
     }
 }
