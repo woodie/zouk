@@ -98,10 +98,10 @@ UX polish for non-technical recipients, not a Gatekeeper fix -- the
 signed/notarized zip already installs with no warning -- double-click ->
 Next -> Next -> Done just reads as more familiar than "unzip, drag to
 Applications." `release.yml`'s "Compute checksum" step prints a sha256
-for both artifacts; only the zip's needs to go into
-`woodie/homebrew-zouk`'s `Casks/zouk.rb` below -- the `.pkg`'s checksum
-is informational only (`gh release create` attaches the `.pkg` itself
-directly to the release, nothing else consumes its checksum). See
+for both artifacts; only the zip's is what the automated cask bump below
+sends on to `woodie/homebrew-zouk`'s `Casks/zouk.rb` -- the `.pkg`'s
+checksum is informational only (`gh release create` attaches the `.pkg`
+itself directly to the release, nothing else consumes its checksum). See
 `docs/COWORK.md`'s "evaluating a `productbuild` `.pkg` installer"
 section for how this was built and why `pkgbuild` (not `productbuild`)
 ended up being the right call.
@@ -129,9 +129,12 @@ ended up being the right call.
 - [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style)
       and push the tag -- this triggers `.github/workflows/release.yml`,
       which builds, zips, and attaches the `.app` to a GitHub Release.
-- [ ] Once that run finishes, copy the sha256 from its "sha256 for the
-      Homebrew cask" step summary into `woodie/homebrew-zouk`'s
-      `Casks/zouk.rb` (`version` and `sha256`), commit, and push.
+- [ ] Once that run finishes, its `trigger-homebrew-bump` job fires a
+      `repository_dispatch` to `woodie/homebrew-zouk` carrying the tag,
+      short version, and sha256 -- that repo's `bump-cask.yml` workflow
+      rewrites `Casks/zouk.rb`, commits, pushes, tags, and publishes a
+      release automatically. Nothing to copy by hand; just check that
+      `homebrew-zouk`'s Actions tab shows a green "Bump cask" run.
 - [ ] For a non-brew hand-off instead: hand off the `.app` directly, and
       if the recipient hits Gatekeeper, point them at the "Getting past
       Gatekeeper" steps above.
