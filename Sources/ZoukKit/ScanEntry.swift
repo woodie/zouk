@@ -21,7 +21,7 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     }
 
     public var humanSize: String {
-        Humane.SizeFormatter().string(fromByteCount: size)
+        Humane.SizeFormatter.humanSize(size)
     }
 
     public var formattedDate: String? {
@@ -33,8 +33,12 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
         return formatter.string(from: downloadedAt)
     }
 
-    public func timeAgo(relativeTo now: Date) -> String? {
-        guard let downloadedAt else { return nil }
-        return Humane.TimeFormatter(approximate: true).string(for: downloadedAt, relativeTo: now)
+    // whenNil absorbs what used to be this method's own `guard let
+    // downloadedAt else { return nil }` -- callers no longer need a `??`
+    // fallback of their own (see ScanGridView). approximate: true is
+    // humane-swift's default as of v0.9.0, so it's no longer passed
+    // explicitly.
+    public func timeAgo(relativeTo now: Date) -> String {
+        Humane.TimeFormatter.timeAgo(downloadedAt, now, whenNil: "an unknown time")
     }
 }

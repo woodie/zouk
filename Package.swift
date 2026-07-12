@@ -14,7 +14,7 @@ let package = Package(
         // conversion itself so the imports are just there when needed.
         .package(url: "https://github.com/Quick/Quick.git", from: "7.0.0"),
         .package(url: "https://github.com/Quick/Nimble.git", from: "13.0.0"),
-        .package(url: "https://github.com/woodie/humane-swift.git", from: "0.2.0"),
+        .package(url: "https://github.com/woodie/humane-swift.git", from: "0.9.0"),
     ],
     targets: [
         // Networking, model, and views live here so the test target can

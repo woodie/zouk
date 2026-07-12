@@ -450,6 +450,44 @@ real `make test` on woodie's Mac -- 46/46 specs pass. Not exercised via
 scoped to the automated suite; revisit with a live pass if `humane-swift`
 behavior is ever in question beyond what the specs cover.
 
+## This session: adopting `humane-swift` v0.9.0's full API rethink
+
+`humane-swift` dropped its instantiated-formatter shape entirely in `v0.9.0`
+-- `Humane.SizeFormatter().string(fromByteCount:)` and
+`Humane.TimeFormatter(approximate: true).string(for:relativeTo:)` are gone,
+replaced by static functions `Humane.SizeFormatter.humanSize`/
+`Humane.TimeFormatter.timeAgo` (see `humane-swift`'s own `docs/COWORK.md`
+`v0.9.0` entry for the full cross-repo rationale). `ScanEntry.humanSize`/
+`timeAgo(relativeTo:)` updated to call the new API; `approximate: true` is
+no longer passed explicitly since it's `humane-swift`'s own default now
+(matching ActionView's always-on-past-the-hour behavior), so rendered
+output is unchanged there.
+
+More than a rename, though: `timeAgo(relativeTo:)` used to `guard let
+downloadedAt else { return nil }` itself, handing back a `String?` that
+`ScanGridView`'s confirmation dialog then needed its own `??  "an unknown
+time"` fallback for -- two guard points for one final string. `humane-swift`
+v0.9.0 added `whenNil:`, a fallback string `TimeAgo`/`timeAgo` returns
+directly when the time argument is nil, built specifically to collapse
+cases exactly like this one. `timeAgo(relativeTo:)` now passes
+`downloadedAt` straight through along with `whenNil: "an unknown time"` and
+returns a plain, non-optional `String` -- `ScanGridView`'s own `??  "an
+unknown time"` fallback is gone, since the value it was covering for can no
+longer occur. `ScanEntrySpec`'s "with an unparsable timestamp" case updated
+to assert the fallback text directly instead of `beNil()`.
+
+`humane-swift` `v0.9.0` is tagged, pushed, and released
+([release](https://github.com/woodie/humane-swift/releases/tag/v0.9.0)) --
+`Package.swift` is back to `.package(url:
+"https://github.com/woodie/humane-swift.git", from: "0.9.0")`, no longer
+the temporary `path: "../humane-swift"` local reference. `swift package
+resolve` regenerates `Package.resolved`'s `humane-swift` pin against the
+real tag.
+
+Made by inspection only per the sandbox limitation above; needs a real
+`make test`/`make build` pass on woodie's Mac before this is tagged as a
+new zouk release.
+
 ## Next up
 
 `humane-swift` fully adopted: tagged/pushed/released as `v0.1.0`

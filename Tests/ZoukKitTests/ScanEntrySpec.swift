@@ -69,8 +69,7 @@ final class ScanEntrySpec: QuickSpec {
                 context("with a valid timestamp") {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
-                    it("is non-nil and includes trailing \" ago\"") {
-                        expect(scan.timeAgo(relativeTo: Date())).toNot(beNil())
+                    it("includes trailing \" ago\"") {
                         expect(scan.timeAgo(relativeTo: Date())).to(endWith(" ago"))
                     }
                 }
@@ -78,8 +77,8 @@ final class ScanEntrySpec: QuickSpec {
                 context("with an unparsable timestamp") {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: "invalid", path: path) }
 
-                    it("is nil") {
-                        expect(scan.timeAgo(relativeTo: Date())).to(beNil())
+                    it("falls back to the whenNil text instead of requiring the caller to guard") {
+                        expect(scan.timeAgo(relativeTo: Date())).to(equal("an unknown time"))
                     }
                 }
             }
