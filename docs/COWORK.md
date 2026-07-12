@@ -506,29 +506,17 @@ tag push succeeded, before considering a release done.
 
 ## Next up
 
-`humane-swift` fully adopted: tagged/pushed/released as `v0.1.0`
-(`github.com/woodie/humane-swift/releases/tag/v0.1.0`), `Package.swift` pinned to it
-(`from: "0.1.0"`, no more local `path:`), confirmed via a real `make build`/`make
-test` resolving the published package from GitHub -- 46/46 pass, same as the `path:`
-version. Nothing pending on this thread.
+Everything tracked in earlier versions of this section (`humane-swift`
+adoption, the `v1.9.0` release, the README "why"/"who it's for" lines, the
+Developer ID Installer cert walkthrough) is done -- see "Current state" and
+the "This session" entries above, through `v1.11.0`. This section was
+several versions stale (still describing pre-`v1.9.0` state after the doc's
+own later entries had moved on); replaced rather than left that way.
 
-Not yet tagged as a new zouk release -- `Resources/Info.plist`'s
-`CFBundleShortVersionString` bumped `1.8.1` -> `1.9.0` (`CFBundleVersion`
-`9` -> `10`) to reflect the real behavior change (the `humane-swift`
-adoption, the "about" prefix, and the 30s/60s clamp fix), but not yet
-committed/tagged/pushed. `.github/workflows/release.yml` triggers on any
-`v*` tag push and handles build/codesign/notarize/zip/`.pkg`/GitHub
-Release/Homebrew-cask-bump automatically -- push `git tag -a v1.9.0 -m
-"v1.9.0" && git push --tags` once confirmed, no manual zip/pkg building
-needed.
-
-Otherwise nothing else pending as of `v1.8.0`. This section used to list
-three items -- a README line on *why* zouk exists, a README line on *who
-it's for*, and resuming the Developer ID Installer cert walkthrough -- all
-three turned out to already be done (README's intro paragraph covers the
-first two almost verbatim; the Installer cert/`.pkg` work is covered in
-"This session: evaluating a `productbuild` `.pkg` installer" above), just
-never recorded here at the time. Cleaned up rather than left stale.
+One genuinely open item, from "Current state" above: `Casks/zouk.rb`'s
+`depends_on macos: ">= :ventura"` triggers a Homebrew deprecation warning
+(string-comparison form) -- should become `depends_on macos: :ventura`, not
+yet fixed.
 
 ## Design conventions established so far (don't regress on these)
 
