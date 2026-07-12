@@ -484,9 +484,25 @@ the temporary `path: "../humane-swift"` local reference. `swift package
 resolve` regenerates `Package.resolved`'s `humane-swift` pin against the
 real tag.
 
-Made by inspection only per the sandbox limitation above; needs a real
-`make test`/`make build` pass on woodie's Mac before this is tagged as a
-new zouk release.
+Made by inspection only per the sandbox limitation above; confirmed for
+real via `make build`/`make test` on woodie's Mac -- 38/38 passing.
+`Resources/Info.plist` bumped `1.10.0` -> `1.11.0` (`CFBundleVersion` `11`
+-> `12`). Tagged, pushed, and released as `v1.11.0`:
+https://github.com/woodie/zouk/releases/tag/v1.11.0 -- signed, notarized,
+and the `homebrew-zouk` cask auto-bumped via `repository_dispatch`
+(`bump-cask #4`, success, https://github.com/woodie/homebrew-zouk/actions).
+Confirmed via `brew update && brew upgrade --cask zouk` on woodie's Mac,
+and live in the running app: the delete-confirm dialog reads "Delete this
+scan from 3 minutes ago?" with no `whenNil:` fallback ever triggering.
+
+One process note from this release: `git push` was accidentally skipped
+(a shell typo turned it into a no-op) and only `git push --tags` ran --
+the tag still carried the right commit along with it (a tag push transfers
+whatever objects it needs, even off-branch), so `release.yml` built the
+correct commit regardless, but `main` on GitHub sat one commit behind
+until a follow-up plain `git push` caught it up. Worth double-checking
+`git status -sb` shows `main` and `origin/main` in sync, not just that the
+tag push succeeded, before considering a release done.
 
 ## Next up
 
