@@ -526,7 +526,28 @@ Not yet exercised against a real tagged release -- next `vX.Y.Z` cut needs
 `docs/releases/vX.Y.Z.md` written and committed first, per the updated
 checklist.
 
-## Next up
+## This session: adopted `humane-swift` v0.9.3
+
+`humane-swift` `v0.9.3` collapses `TimeFormatter`/`SizeFormatter` into one
+`enum Humane` and renames the old two-argument `.timeAgo` to
+`.distanceInTime` (adding a new one-argument `.timeAgo` convenience) -- see
+`humane-swift`'s own `docs/COWORK.md` `v0.9.3` entry. `ScanEntry.humanSize`/
+`timeAgo(relativeTo:)` updated to `Humane.humanSize`/`Humane.distanceInTime`.
+Deliberately *not* switched to the new one-argument `Humane.timeAgo`
+convenience -- `timeAgo(relativeTo:)` keeps its own explicit `now`
+parameter on purpose, since `ScanEntrySpec` needs an injectable clock;
+that's exactly the distinction called out in `humane-swift`'s own release
+notes for this version.
+
+`Package.swift`'s `from: "0.9.0"` dependency requirement already permitted
+`0.9.3` unchanged. Confirmed for real on woodie's Mac: `swift package
+update humane-swift` (resolved `0.9.3`), `make build` (release
+configuration, clean), `make test` (38/38, 0 failures), and `make run`
+against a live `lambada-web` server -- screenshot shows the delete
+confirmation dialog reading "Delete this scan from 5 days ago?", proving
+`ScanEntry.timeAgo(relativeTo:)`'s new `Humane.distanceInTime` call
+resolves correctly in the running app, not just in specs. Not yet tagged
+as its own `zouk` release.
 
 Everything tracked in earlier versions of this section (`humane-swift`
 adoption, the `v1.9.0` release, the README "why"/"who it's for" lines, the
