@@ -126,6 +126,16 @@ ended up being the right call.
       triggered it. The fix, if it happens anyway: delete the GitHub
       Release, delete the tag (local and remote), pull for real, re-tag,
       re-push.
+- [ ] Write `docs/releases/vX.Y.Z.md` (see existing files for the
+      template) and commit it -- `release.yml`'s "Publish release" step
+      reads this file via `--notes-file` instead of auto-generating notes
+      from the commit log, the same convention `humane`/`humane-ruby`/
+      `humane-swift` already use. It has to exist *before* the tag is
+      pushed: tagging triggers the workflow immediately, so there's no
+      manual step afterward to attach notes with. If it's missing, the
+      "Publish release" step fails outright rather than silently falling
+      back to generated notes -- that's on purpose, not a bug to work
+      around.
 - [ ] Tag the release (annotated, `vX.Y.Z`; see existing tags for style)
       and push the tag -- this triggers `.github/workflows/release.yml`,
       which builds, zips, and attaches the `.app` to a GitHub Release.

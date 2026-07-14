@@ -148,11 +148,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Pulls from docs/releases/<tag>.md instead of --generate-notes'
+          # auto-generated commit list -- write and commit that file (same
+          # convention as humane/humane-ruby/humane-swift's own
+          # docs/releases/) before pushing the tag that triggers this
+          # workflow. Fails loudly if it's missing rather than silently
+          # falling back to generated notes, on purpose: that's the signal
+          # the tag got pushed a step too early.
           gh release create "${{ github.ref_name }}" \
             "${{ steps.checksum.outputs.zip_path }}" \
             "${{ steps.checksum.outputs.pkg_path }}" \
             --title "${{ github.ref_name }}" \
-            --generate-notes
+            --notes-file "docs/releases/${{ github.ref_name }}.md"
 
   trigger-homebrew-bump:
     # The actual cask bump (sed the version/sha256, commit, tag) now lives
