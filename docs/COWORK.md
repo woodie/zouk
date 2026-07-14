@@ -504,6 +504,28 @@ until a follow-up plain `git push` caught it up. Worth double-checking
 `git status -sb` shows `main` and `origin/main` in sync, not just that the
 tag push succeeded, before considering a release done.
 
+## This session: `release.yml` reads release notes from `docs/releases/<tag>.md`
+
+woodie's ask: the tag/release flow here is entirely action-driven (push a
+tag, `release.yml` builds/signs/notarizes/publishes with no manual step in
+between), so there was never a point to hand-write release notes the way
+`humane`/`humane-ruby`/`humane-swift` do via `gh release create
+--notes-file` -- `release.yml`'s "Publish release" step used
+`--generate-notes` instead, GitHub's auto-generated commit-log notes.
+Switched to `--notes-file "docs/releases/${{ github.ref_name }}.md"`,
+matching the other three repos' convention exactly (`docs/releases/` here
+already exists, with `v1.3.0.md` as the one prior example). Deliberately
+fails the whole publish step if that file is missing rather than falling
+back to generated notes -- since the tag push is what triggers the
+workflow, there's no later point to add notes after the fact the way
+`gh release create` run by hand allows; the file has to exist and be
+committed before the tag goes out. `docs/DELIVERY.md`'s pre-flight
+checklist gained a step for this, ahead of "Tag the release."
+
+Not yet exercised against a real tagged release -- next `vX.Y.Z` cut needs
+`docs/releases/vX.Y.Z.md` written and committed first, per the updated
+checklist.
+
 ## Next up
 
 Everything tracked in earlier versions of this section (`humane-swift`
