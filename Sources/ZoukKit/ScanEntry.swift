@@ -21,7 +21,7 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     }
 
     public var humanSize: String {
-        Humane.SizeFormatter.humanSize(size)
+        Humane.humanSize(size)
     }
 
     public var formattedDate: String? {
@@ -37,8 +37,10 @@ public struct ScanEntry: Codable, Identifiable, Equatable {
     // downloadedAt else { return nil }` -- callers no longer need a `??`
     // fallback of their own (see ScanGridView). approximate: true is
     // humane-swift's default as of v0.9.0, so it's no longer passed
-    // explicitly.
+    // explicitly. Calls distanceInTime (not the one-argument timeAgo
+    // convenience humane-swift v0.9.3 also added) since this method
+    // deliberately keeps an explicit relativeTo for ScanEntrySpec to pin.
     public func timeAgo(relativeTo now: Date) -> String {
-        Humane.TimeFormatter.timeAgo(downloadedAt, now, whenNil: "an unknown time")
+        Humane.distanceInTime(downloadedAt, now, whenNil: "an unknown time")
     }
 }
