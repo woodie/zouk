@@ -57,6 +57,26 @@ test:
 lint:
 	swiftlint
 
+# Terser than `test` on purpose: swift test/xctidy have no quiet mode of
+# their own, so this just suppresses output on success and dumps the full
+# log on failure, guaranteeing errors are never hidden regardless of swift
+# test's exact output format -- matching humane-swift's/next-caltrain-swift's
+# own lint/test/check split. Doesn't depend on `lint` yet, unlike those two
+# siblings, since swiftlint's violation count against this repo is still
+# unknown (see `lint`'s own comment above) -- wiring it in now could fail
+# `make check` on pre-existing violations nobody's triaged yet.
+.PHONY: check
+check:
+	@LOG=$$(mktemp); \
+	if $(SWIFT) test > "$$LOG" 2>&1; then \
+		echo "PASS"; \
+	else \
+		cat "$$LOG"; \
+		rm -f "$$LOG"; \
+		exit 1; \
+	fi; \
+	rm -f "$$LOG"
+
 # swift run execs the binary as a plain child of the shell -- no app
 # bundle, no LaunchServices, so the window can appear without ever
 # becoming the focused/key app (keystrokes go to the launching terminal

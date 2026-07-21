@@ -561,6 +561,35 @@ One genuinely open item, from "Current state" above: `Casks/zouk.rb`'s
 (string-comparison form) -- should become `depends_on macos: :ventura`, not
 yet fixed.
 
+## This session: `make check` added, terse -- `make test` unchanged
+
+zouk had no `check` target at all before this -- only `build`/`test`/`lint`,
+`test` verbose via `xctidy -fs`. Every other repo in this account (`humane`,
+`humane-ruby`, `humane-swift`, `next-caltrain-kotlin`, `next-caltrain-swift`)
+splits `test` (always verbose, documentation-style nested output) from
+`check` (terse -- silent on success, full log dumped on failure) -- zouk was
+the one sibling missing the terse half of that split, likely because it
+predates the convention. Added a `check` target matching `humane-swift`'s
+own shape exactly (`swift test`, no `xctidy` piping, output captured to a
+temp log and only shown on failure) -- see the Makefile's own comment on
+`check` for why it deliberately doesn't depend on `lint` yet, unlike the
+`humane-swift`/`next-caltrain-swift` siblings (swiftlint's violation count
+against zouk is still unknown, per `lint`'s own pre-existing comment; wiring
+it into `check` now risks failing on pre-existing violations nobody's
+triaged). `make test` itself is untouched -- still the full `xctidy -fs`
+tree, exactly as before.
+
+Companion fix in `huck` (Kotlin sibling, different toolchain but the same
+gap): its `check` target existed already but wasn't actually terse -- it ran
+`./gradlew clean check` straight, which reprints the same nested
+`TestListener` tree `make test` does. Wrapped in the same
+mktemp-log/silent-on-success/dump-on-failure pattern now. See `huck`'s own
+`docs/COWORK.md` for that half.
+
+Not yet confirmed on real hardware -- needs a real `make check`/`make test`
+pair run on woodie's Mac to confirm `check` actually stays quiet on a clean
+pass and `test` still renders the full tree unchanged.
+
 ## Design conventions established so far (don't regress on these)
 
 The UI has gone through many rounds of "make it match Finder exactly,"
@@ -776,7 +805,8 @@ so these choices are deliberate, not arbitrary:
 
 ```
 make build     # swift build --configuration release
-make test      # swift test
+make test      # swift test | xctidy -fs -- verbose, full nested tree
+make check     # swift test, terse -- "PASS" on success, full log on failure
 make run       # assembles .build/zouk.app and opens it via `open`,
                # so the window becomes key/focused like a real Mac app
                # (swift run alone leaves keystrokes going to the terminal)
