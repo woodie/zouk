@@ -221,12 +221,20 @@ private struct ScanThumbnailCell: View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
                 if let image {
+                    // Tuned against real side-by-side measurements on real hardware (huck's own
+                    // placeholder-matched 76x96 read too small; 96x120 -- filling the full outer
+                    // frame -- read too big; 86x108 still read a real ~13% larger than huck's
+                    // thumbnail). 82x104 is the real-measurement-derived middle ground. Outer
+                    // 96x120 stays fixed either way, matching DogEaredDocumentIcon's own
+                    // double-frame below, so the cell's overall footprint doesn't change between
+                    // cached and uncached scans.
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 96, height: 120)
+                        .frame(width: 82, height: 104)
                         .background(Color(nsColor: .textBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .frame(width: 96, height: 120)
                 } else {
                     // Drawn, not clipped, so the dog-ear fold and shadow render like Finder's placeholder.
                     DogEaredDocumentIcon()
