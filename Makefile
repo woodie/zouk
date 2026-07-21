@@ -48,7 +48,7 @@ build:
 
 .PHONY: test
 test:
-	$(SWIFT) test
+	$(SWIFT) test | xctidy -fs
 
 # Config lifted from next-caltrain-swift's .swiftlint.yml -- requires the
 # swiftlint CLI (`brew install swiftlint`); not wired into CI yet since
