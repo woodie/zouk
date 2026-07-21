@@ -20,10 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and test
+      - name: Build
+        run: make build
+
+      - name: Install xctidy
+        # Same rationale as CI.yml -- make test pipes through xctidy -fs now, and xctidy has no
+        # Homebrew tap yet, so it's built from source, pinned to its latest tagged release.
         run: |
-          make build
-          make test
+          git clone --branch v0.3.0 --depth 1 https://github.com/woodie/xctidy.git "$RUNNER_TEMP/xctidy"
+          make -C "$RUNNER_TEMP/xctidy" install
+
+      - name: Test
+        run: make test
 
       - name: Import signing certificates
         env:

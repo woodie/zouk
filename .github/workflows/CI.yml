@@ -31,6 +31,15 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Install xctidy
+        # make test now pipes through xctidy -fs (see Makefile) for readable nested
+        # describe/context/it output -- xctidy has no Homebrew tap yet, so it's built from
+        # source per its own README, pinned to its latest tagged release rather than main so an
+        # unreleased xctidy change can't break this CI unexpectedly.
+        run: |
+          git clone --branch v0.3.0 --depth 1 https://github.com/woodie/xctidy.git "$RUNNER_TEMP/xctidy"
+          make -C "$RUNNER_TEMP/xctidy" install
+
       - name: Test
         run: make test
 
