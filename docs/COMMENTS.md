@@ -66,6 +66,21 @@ make `AppModel()` ambiguous between them. Tests construct via the
 internal initializer directly (reachable through `@testable import`) to
 inject a `FakeScanClient` without ever calling `connect()`.
 
+### `AppModel.connect()`'s `clientFactory`
+`connect()` used to build its own `ScanClient(baseURL:)` directly, so the
+internal `client: (any ScanFetching)?` init parameter above only ever
+reached delete/save/thumbnail -- a spec that wanted `connect()` itself to
+succeed or fail against a fake had no seam to do it, unlike huck's
+`AppModel.kt`, whose `clientFactory` was already the canonical version of
+this pattern (see kotidy's `docs/FRAMEWORK.md`). `connect()` now calls the
+injected `clientFactory` instead of constructing `ScanClient` inline;
+defaulting it to `{ ScanClient(baseURL: $0) }` on the internal designated
+init keeps production behavior identical and the public convenience init
+untouched. `AppModelSpec.swift`'s new `connect()`-focused contexts are the
+first real callers of this seam -- see its own notes on why they're the
+only two tests in this file paying the real (non-virtual) 2-second
+`minimumConnectingDuration` cost.
+
 ### `AppModel` (class)
 Drives the whole app: remembers the last host the user typed in, opens
 the host-entry screen until a connection succeeds, then holds the scan
@@ -625,6 +640,56 @@ it's what arms `ScanGridView`'s `.confirmationDialog`. The right-click
 directly with no confirmation, so it's out of scope here; see
 `AppModel.requestDelete(_:)`'s note above for why the two trash triggers
 behave differently on purpose.
+
+### New top-level contexts: persisted host, `connect()`, standalone `changeServer()`
+Added to bring this file's coverage up to parity with huck's own
+`AppModelSpec.kt`, which already had all four (see huck's own comment on
+this same alignment pass) -- huck's version is the one that had them
+first, not a huck-only gap being invented here. `.baseURL(fromHostInput:)`
+now comes first (matching huck's `.baseUrlFrom()` position), followed by
+"constructed with a previously saved host," three `connect()` contexts,
+and a standalone `changeServer()` -- all four ahead of "with a connected
+model showing one scan," same ordering huck already used. The `connect()`
+contexts are the first real callers of `AppModel`'s new `clientFactory`
+seam (see `Sources/ZoukKit/AppModel.swift`'s own comment on that); two of
+the three pay a real ~2s `minimumConnectingDuration` cost apiece since
+Swift/Quick has no virtual-time equivalent to `kotlinx-coroutines-test`'s
+`runTest` -- accepted as the price of parity rather than weakening the
+assertion or skipping the wait.
+
+### `context("with a savedMessage lingering from a previous open(_:)")` has no huck counterpart
+huck's `AppModel.kt` narrowed `savedMessage` to a private setter (this
+repo's `savedMessage` stays a fully public `var`, matching every other
+`@Published` property except `hasEverConnected`) -- see huck's own
+`AppModelSpec.kt` comment at the equivalent spot for why that's a
+deliberate, documented one-sided gap rather than something to fix by
+loosening either side's encapsulation.
+
+## Tests/ZoukKitTests/ScanEntrySpec.swift
+
+### Fixture values now shared with huck's `ScanEntrySpec.kt`
+`name`/`size`/`path` already matched `ScanClientSpec.swift`'s own fixture
+convention; `size` is now the 79_992-byte value `humane-swift`/
+`humane-kotlin` both already test explicitly as "80 KB" (see
+`HumanSizeSpec.swift`'s "with the shared 79992-byte fixture used by
+lambada/scandalous"), and `time` dropped its `-07:00` offset for a plain
+`Z` suffix -- huck's `Instant.parse` only accepts strict UTC ISO-8601,
+so a shared fixture across both languages has to be `Z`-suffixed on both
+sides regardless of what `ISO8601DateFormatter` alone could parse here.
+
+### `describe("id")`
+New -- huck's `ScanEntrySpec.kt` already tested `id`'s `Identifiable`-style
+conformance; this was the one describe-grouping huck had that this file
+didn't.
+
+### `#humanSize`'s exact match, `#timeAgo(relativeTo:)`'s fixed `relativeTo`
+Both used to accept a looser result than huck's equivalent tests: `contain("500 KB")`
+instead of an exact match, and a live `Date()` for `relativeTo` (so the
+"ago" wording depended on when the suite happened to run) checked only
+with `endWith(" ago")`. Tightened to match huck's own rigor now that the
+fixture is shared: `equal("80 KB")` outright, and `relativeTo` derived as
+`scan.downloadedAt! + 5 minutes` so `timeAgo` resolves to the deterministic,
+exact `"5 minutes ago"` huck's own test already asserted.
 
 ## Tests/ZoukKitTests/FakeHTTPClient.swift
 

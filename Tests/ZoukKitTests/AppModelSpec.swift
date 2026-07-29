@@ -55,6 +55,116 @@ final class AppModelSpec: AsyncSpec {
                 }
             }
 
+            context("constructed with a previously saved host") {
+                it("reads hostInput back out of UserDefaults") {
+                    let defaults = makeEphemeralDefaults()
+                    defaults.set("scans.example.com", forKey: "zouk.lastHost")
+
+                    let model = await MainActor.run {
+                        AppModel(defaults: defaults, autoConnect: false, client: nil)
+                    }
+
+                    await MainActor.run {
+                        expect(model.hostInput).to(equal("scans.example.com"))
+                    }
+                }
+            }
+
+            context("connect() with a blank hostInput") {
+                it("fails without attempting a network call") {
+                    let model = await MainActor.run {
+                        AppModel(defaults: makeEphemeralDefaults(), autoConnect: false, client: nil)
+                    }
+
+                    await model.connect()
+
+                    await MainActor.run {
+                        expect(model.state).to(equal(
+                            .failed("Enter a hostname or IP address, like scans.example.com or 10.0.1.111.")
+                        ))
+                        expect(model.hasEverConnected).to(beFalse())
+                    }
+                }
+            }
+
+            // Swift/Quick has no equivalent of kotlinx-coroutines-test's runTest virtual time
+            // (see huck's own AppModelSpec.kt comment on this exact gap), so this context and
+            // "connect() with a client that throws" below each pay a real ~2s
+            // minimumConnectingDuration wait.
+            context("connect() with a valid host and a client that succeeds") {
+                it("stores the scans, marks hasEverConnected, and persists the host") {
+                    let defaults = makeEphemeralDefaults()
+                    let fixtureScan = ScanEntry(
+                        name: "scan.pdf", size: 79_992, time: "2026-07-19T10:00:00Z", path: "/files/scan.pdf"
+                    )
+                    let fakeClient = FakeScanClient()
+                    fakeClient.fetchScansHandler = { [fixtureScan] }
+                    let model = await MainActor.run {
+                        AppModel(
+                            defaults: defaults, autoConnect: false, client: nil,
+                            clientFactory: { _ in fakeClient }
+                        )
+                    }
+                    await MainActor.run { model.hostInput = "scans.example.com" }
+
+                    await model.connect()
+
+                    await MainActor.run {
+                        expect(model.state).to(equal(.connected))
+                        expect(model.hasEverConnected).to(beTrue())
+                        expect(model.scans).to(equal([fixtureScan]))
+                    }
+                    expect(defaults.string(forKey: "zouk.lastHost")).to(equal("scans.example.com"))
+                }
+            }
+
+            context("connect() with a client that throws") {
+                it("fails and leaves hasEverConnected false") {
+                    let fakeClient = FakeScanClient()
+                    fakeClient.fetchScansHandler = { throw URLError(.unknown) }
+                    let model = await MainActor.run {
+                        AppModel(
+                            defaults: makeEphemeralDefaults(), autoConnect: false, client: nil,
+                            clientFactory: { _ in fakeClient }
+                        )
+                    }
+                    await MainActor.run { model.hostInput = "scans.example.com" }
+
+                    await model.connect()
+
+                    await MainActor.run {
+                        expect(model.state).to(equal(.failed("Check that it's on the same network.")))
+                        expect(model.hasEverConnected).to(beFalse())
+                    }
+                }
+            }
+
+            context("changeServer()") {
+                it("resets hasEverConnected, state, and scans") {
+                    let fixtureScan = ScanEntry(
+                        name: "scan.pdf", size: 79_992, time: "2026-07-19T10:00:00Z", path: "/files/scan.pdf"
+                    )
+                    let fakeClient = FakeScanClient()
+                    fakeClient.fetchScansHandler = { [fixtureScan] }
+                    let model = await MainActor.run {
+                        AppModel(
+                            defaults: makeEphemeralDefaults(), autoConnect: false, client: nil,
+                            clientFactory: { _ in fakeClient }
+                        )
+                    }
+                    await MainActor.run { model.hostInput = "scans.example.com" }
+                    await model.connect()
+
+                    await MainActor.run {
+                        model.changeServer()
+
+                        expect(model.state).to(equal(.idle))
+                        expect(model.hasEverConnected).to(beFalse())
+                        expect(model.scans).to(beEmpty())
+                    }
+                }
+            }
+
             // AsyncSpec (not QuickSpec) is needed since AppModel is @MainActor.
 
             context("with a connected model showing one scan") {

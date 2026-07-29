@@ -7,8 +7,8 @@ final class ScanEntrySpec: QuickSpec {
     override class func spec() {
         describe("ScanEntry") {
             let name = "1779907271.pdf"
-            let size = 500_000
-            let time = "2026-06-25T10:30:00-07:00"
+            let size = 79_992
+            let time = "2026-07-19T10:00:00Z"
             let path = "/download/\(name)"
 
             describe("Decodable") {
@@ -29,6 +29,12 @@ final class ScanEntrySpec: QuickSpec {
                         expect(scans[0].path).to(equal(path))
                         expect(scans[0].downloadedAt).toNot(beNil())
                     }
+                }
+            }
+
+            describe("id") {
+                it("is the scan's name") {
+                    expect(ScanEntry(name: name, size: size, time: time, path: path).id).to(equal(name))
                 }
             }
 
@@ -58,8 +64,8 @@ final class ScanEntrySpec: QuickSpec {
                 var scan: ScanEntry!
                 beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
-                it("is human readable") {
-                    expect(scan.humanSize).to(contain("500 KB"))
+                it("formats as \"80 KB\"") {
+                    expect(scan.humanSize).to(equal("80 KB"))
                 }
             }
 
@@ -69,8 +75,9 @@ final class ScanEntrySpec: QuickSpec {
                 context("with a valid timestamp") {
                     beforeEach { scan = ScanEntry(name: name, size: size, time: time, path: path) }
 
-                    it("includes trailing \" ago\"") {
-                        expect(scan.timeAgo(relativeTo: Date())).to(endWith(" ago"))
+                    it("returns \"5 minutes ago\" for a 5-minute gap") {
+                        let relativeTo = scan.downloadedAt!.addingTimeInterval(5 * 60)
+                        expect(scan.timeAgo(relativeTo: relativeTo)).to(equal("5 minutes ago"))
                     }
                 }
 

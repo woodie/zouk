@@ -45,6 +45,11 @@ public final class AppModel: ObservableObject {
     private let cacheDirectory: URL
     private let downloadsDirectory: URL
     private var client: (any ScanFetching)?
+    // connect()'s own seam for the client it creates on a successful connection -- matching
+    // huck's AppModel.kt clientFactory exactly (see kotidy's docs/FRAMEWORK.md "Dependency
+    // injection via a constructor-supplied factory"). Test-only surface, like `client` above:
+    // production code never overrides the default.
+    private let clientFactory: (URL) -> any ScanFetching
     private var thumbnailCache: [String: NSImage] = [:]
 
     public convenience init(
@@ -67,7 +72,8 @@ public final class AppModel: ObservableObject {
         cacheDirectory: URL? = nil,
         downloadsDirectory: URL? = nil,
         autoConnect: Bool = true,
-        client: (any ScanFetching)?
+        client: (any ScanFetching)?,
+        clientFactory: @escaping (URL) -> any ScanFetching = { ScanClient(baseURL: $0) }
     ) {
         self.defaults = defaults
         self.hostInput = defaults.string(forKey: Self.hostKey) ?? ""
@@ -78,6 +84,7 @@ public final class AppModel: ObservableObject {
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
         self.client = client
+        self.clientFactory = clientFactory
 
         if autoConnect, !hostInput.isEmpty {
             Task { await connect() }
@@ -98,7 +105,7 @@ public final class AppModel: ObservableObject {
         defer { isBusy = false }
 
         let attemptStart = ContinuousClock.now
-        let client = ScanClient(baseURL: baseURL)
+        let client = clientFactory(baseURL)
         self.client = client
         do {
             scans = try await client.fetchScans()
