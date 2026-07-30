@@ -106,6 +106,47 @@ itself directly to the release, nothing else consumes its checksum). See
 section for how this was built and why `pkgbuild` (not `productbuild`)
 ended up being the right call.
 
+## Restoring signing credentials on a new machine
+
+Local signing (`make sign`/`make pkg`) needs both certs' private keys sitting
+in this Mac's own Keychain -- they don't travel with the repo, so a fresh
+machine needs them re-imported from backup before either target works.
+GitHub Actions' copies (the `CERTIFICATE_P12_BASE64`/
+`INSTALLER_CERTIFICATE_P12_BASE64` secrets) are separate from this and don't
+need touching for local builds to work.
+
+1. Locate your two backed-up files -- typically named something like
+   `Certificates-GH.p12` (Developer ID Application) and `Installer-GH.p12`
+   (Developer ID Installer).
+2. Import both. **Don't use Keychain Access's own drag-and-drop/File > Import
+   Items** -- on at least one real machine (macOS 26 Tahoe) this failed both
+   files with an opaque `OSStatus -26276` / "Unable to import an item."
+   error, even though the files and passwords were completely fine. The
+   `security` CLI import worked immediately on the exact same files:
+   ```
+   security import ~/Downloads/Certificates-GH.p12 -k ~/Library/Keychains/login.keychain-db
+   security import ~/Downloads/Installer-GH.p12 -k ~/Library/Keychains/login.keychain-db
+   ```
+   Each prompts for that file's own export password.
+3. Verify. The two certs show up under two different checks, not one --
+   don't be alarmed if the Installer cert is "missing" from the first
+   command:
+   ```
+   security find-identity -v -p codesigning
+   ```
+   shows **only** `Developer ID Application: John Woodell (754T277KBJ)` --
+   the Installer cert genuinely doesn't match the codesigning policy, since
+   it signs `.pkg` installers, not executable code. That's expected, not a
+   sign of a failed import. Confirm the Installer cert separately with no
+   policy filter:
+   ```
+   security find-identity
+   ```
+   which should list both certs under "Valid identities only."
+4. Once both show up, `make bundle && make sign && make pkg` should work
+   with no further config -- signing is resolved by identity name/team ID,
+   not a path set anywhere in this repo.
+
 ## Pre-flight checklist for cutting a release
 
 - [ ] Commit and push all changes (`git status` should be clean).
