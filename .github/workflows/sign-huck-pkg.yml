@@ -65,45 +65,108 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
           security list-keychain -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
 
-      # Compose Desktop's own signing/notarization DSL reads these
-      # `compose.desktop.mac.*` Gradle properties directly -- no changes
-      # needed in huck's build.gradle.kts at all. `identity` is the shared
-      # "John Woodell (754T277KBJ)" portion of both Developer ID cert
-      # names (Application and Installer): jpackage looks up whichever
-      # cert type it needs for the artifact it's currently signing (the
-      # .app vs. the .pkg) by matching this string against the keychain,
-      # the same way release.yml's own CODESIGN_IDENTITY/
-      # INSTALLER_IDENTITY split already works from one shared name. See
-      # docs/COMMENTS.md.
+      # Compose Desktop's own signing DSL reads these `compose.desktop.mac.*`
+      # Gradle properties directly -- no changes needed in huck's
+      # build.gradle.kts. `identity` is the shared "John Woodell
+      # (754T277KBJ)" portion of both Developer ID cert names (Application
+      # and Installer): jpackage looks up whichever cert type it needs by
+      # matching this string against the keychain, the same way
+      # release.yml's own CODESIGN_IDENTITY/INSTALLER_IDENTITY split
+      # already works from one shared name.
       #
-      # `notarizePkg` builds, signs, and notarizes the .pkg in one task --
-      # jpackage's own --mac-sign runs during packaging itself, so it can
-      # reach native libraries bundled inside .jars (unlike an external
-      # `codesign --deep` on an already-built .app, which can't see into
-      # jar-embedded content at all).
-      - name: Build, sign, and notarize the .pkg
+      # createDistributable, not packagePkg/notarizePkg -- confirmed via a
+      # real v0.5.2 install + `pkgutil --expand-full`/`lsbom` that
+      # packagePkg/notarizePkg bake a spurious extra `app/` directory into
+      # the .pkg's payload (Huck lands at /Applications/app/Huck.app, not
+      # /Applications/Huck.app), unrelated to and not fixed by
+      # nativeDistributions.macOS.installationPath. That's a real bug in
+      # this Compose Multiplatform version, not something under huck's
+      # control -- so this only uses Compose Desktop's DSL for what it
+      # actually needs to do (sign the .app, reaching the jar-embedded
+      # dylib no external codesign call could touch), and hand-rolls the
+      # .pkg itself below the same way release.yml already does for zouk.
+      # See docs/COMMENTS.md.
+      - name: Build and sign the .app
+        run: |
+          ./gradlew createDistributable \
+            -Pcompose.desktop.mac.sign=true \
+            -Pcompose.desktop.mac.signing.identity="John Woodell (754T277KBJ)"
+          echo "APP_PATH=$(ls -d build/compose/binaries/main/app/*.app)" >> "$GITHUB_ENV"
+
+      # Same notarize-the-.app-first pattern as release.yml's own
+      # "Notarize and staple the .app" step -- identical `if !`/log-fetch
+      # shape, just against huck's freshly built .app instead of zouk's.
+      - name: Notarize and staple the .app
         env:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          ./gradlew notarizePkg \
-            -Pcompose.desktop.mac.sign=true \
-            -Pcompose.desktop.mac.signing.identity="John Woodell (754T277KBJ)" \
-            -Pcompose.desktop.mac.notarization.appleID="$NOTARY_APPLE_ID" \
-            -Pcompose.desktop.mac.notarization.password="$NOTARY_PASSWORD" \
-            -Pcompose.desktop.mac.notarization.teamID="$NOTARY_TEAM_ID"
+          ditto -c -k --keepParent "$APP_PATH" huck-notarize-submission.zip
+          if ! submission_output=$(xcrun notarytool submit huck-notarize-submission.zip \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait); then
+            submit_failed=1
+          else
+            submit_failed=0
+          fi
+          echo "$submission_output"
+          submission_id=$(echo "$submission_output" | awk '/id:/ { print $2; exit }')
+          xcrun notarytool log "$submission_id" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" || true
+          if [ "$submit_failed" -eq 1 ]; then
+            echo "::error::App notarization failed -- see the log printed above."
+            exit 1
+          fi
+          xcrun stapler staple "$APP_PATH"
 
-      # Stapling should already happen as part of `notarizePkg`, but it's
-      # cheap and idempotent to confirm/reapply explicitly here rather than
-      # assume -- this is the first real run of this task against huck's
-      # actual jar-embedded-dylib case, and re-stapling an already-stapled
-      # .pkg is a harmless no-op.
-      - name: Confirm the .pkg is stapled
+      # Same --component-plist/pkgbuild shape as this repo's own `make pkg`
+      # target -- BundleIsVersionChecked forced false for the same reason
+      # (see this repo's Makefile comment). bundle_id/version are read from
+      # the built .app's own Info.plist rather than hardcoded, matching
+      # this workflow's previous (pre-rewrite) version.
+      - name: Build the installer .pkg
         run: |
-          pkg_path=$(ls build/compose/binaries/main/pkg/*.pkg)
-          xcrun stapler staple "$pkg_path"
-          echo "PKG_PATH=$pkg_path" >> "$GITHUB_ENV"
+          bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Contents/Info.plist")
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
+          mkdir -p pkgroot/Applications
+          cp -R "$APP_PATH" "pkgroot/Applications/$(basename "$APP_PATH")"
+          cat > component.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><array><dict>
+          <key>BundleHasStrictIdentifier</key><true/>
+          <key>BundleIsRelocatable</key><false/>
+          <key>BundleIsVersionChecked</key><false/>
+          <key>BundleOverwriteAction</key><string>upgrade</string>
+          <key>RootRelativeBundlePath</key><string>Applications/$(basename "$APP_PATH")</string>
+          </dict></array></plist>
+          PLIST
+          pkgbuild --root pkgroot \
+            --install-location / \
+            --component-plist component.plist \
+            --identifier "$bundle_id" \
+            --version "$version" \
+            --sign "Developer ID Installer: John Woodell (754T277KBJ)" \
+            "Huck-$version.pkg"
+          echo "PKG_PATH=Huck-$version.pkg" >> "$GITHUB_ENV"
+
+      - name: Notarize and staple the .pkg
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "$PKG_PATH" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$PKG_PATH"
 
       # SIGNING_BRIDGE_TOKEN, not the default GITHUB_TOKEN -- this job's
       # own default token is scoped to zouk, with no access to huck's repo
