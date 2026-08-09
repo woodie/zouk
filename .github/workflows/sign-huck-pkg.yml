@@ -1,20 +1,38 @@
 name: Sign Huck .pkg
 
 # Huck (github.com/woodie/huck) doesn't hold its own Developer ID certs or
-# notarization credentials -- rather than duplicate those eight secrets
-# into a second repo, huck's own release workflow uploads an unsigned .app
-# to its GitHub Release and fires this repository_dispatch, reusing this
-# repo's existing signing identity/notary account instead of a fresh one.
-# See docs/COMMENTS.md.
+# notarization credentials -- rather than duplicate those secrets into a
+# second repo, this job checks out huck's own source at the tagged
+# release and runs ITS Gradle build here, on a runner that already has
+# this repo's signing identity/notary account. This isn't just secret-
+# sharing convenience: jpackage's own --mac-sign (wired up via Compose
+# Desktop's signing/notarization DSL, driven below entirely through -P
+# properties) is the only thing that can correctly sign a native library
+# bundled inside a .jar (Skiko's own .dylib, in huck's case) -- an
+# external `codesign --deep` on an already-built .app can't reach into
+# jar-embedded content at all, which is exactly what made the previous
+# version of this workflow (sign a pre-built, downloaded .app) fail
+# notarization. See docs/COMMENTS.md.
 on:
   repository_dispatch:
     types: [sign-huck-pkg]
 
 jobs:
-  sign-and-attach:
+  build-sign-notarize:
     runs-on: macos-latest
 
     steps:
+      - name: Check out huck at the release tag
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.repo }}
+          ref: ${{ github.event.client_payload.tag }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       # Identical to release.yml's own "Import signing certificates" step
       # -- same certs, same keychain, just triggered from a different event
       # for a different app.
@@ -47,129 +65,50 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
           security list-keychain -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
 
-      - name: Download Huck's unsigned .app
-        run: |
-          curl -fsSL -o huck-unsigned.zip "${{ github.event.client_payload.zip_url }}"
-          ditto -x -k huck-unsigned.zip .
-          # Extended attributes picked up by the zip round-trip (built via
-          # ditto on huck's runner, downloaded via curl, extracted via ditto
-          # here) can leave stray xattrs on nested binaries -- a well-
-          # documented cause of "code has no resources but signature
-          # indicates they must be present" / notarization "Invalid" for
-          # jpackage's bundled JDK dylibs (libjli.dylib in particular). See
-          # docs/COMMENTS.md.
-          xattr -cr "Huck.app"
-
-      # jpackage-built apps need explicit JVM hardened-runtime entitlements
-      # (JIT/unsigned executable memory/library validation) that jpackage's
-      # own --mac-sign would normally generate automatically -- not
-      # available here, since signing happens externally and after the
-      # fact, not during jpackage's own build. See docs/COMMENTS.md.
-      - name: Sign the .app
-        run: |
-          cat > entitlements.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>com.apple.security.cs.allow-jit</key><true/>
-            <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
-            <key>com.apple.security.cs.disable-library-validation</key><true/>
-          </dict>
-          </plist>
-          PLIST
-          codesign --force --deep --options runtime --timestamp \
-            --entitlements entitlements.plist \
-            --sign "Developer ID Application: John Woodell (754T277KBJ)" \
-            "Huck.app"
-          codesign --verify --deep --strict --verbose=2 "Huck.app"
-
-      - name: Notarize and staple the .app
+      # Compose Desktop's own signing/notarization DSL reads these
+      # `compose.desktop.mac.*` Gradle properties directly -- no changes
+      # needed in huck's build.gradle.kts at all. `identity` is the shared
+      # "John Woodell (754T277KBJ)" portion of both Developer ID cert
+      # names (Application and Installer): jpackage looks up whichever
+      # cert type it needs for the artifact it's currently signing (the
+      # .app vs. the .pkg) by matching this string against the keychain,
+      # the same way release.yml's own CODESIGN_IDENTITY/
+      # INSTALLER_IDENTITY split already works from one shared name. See
+      # docs/COMMENTS.md.
+      #
+      # `notarizePkg` builds, signs, and notarizes the .pkg in one task --
+      # jpackage's own --mac-sign runs during packaging itself, so it can
+      # reach native libraries bundled inside .jars (unlike an external
+      # `codesign --deep` on an already-built .app, which can't see into
+      # jar-embedded content at all).
+      - name: Build, sign, and notarize the .pkg
         env:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          ditto -c -k --keepParent "Huck.app" huck-notarize-submission.zip
-          # `if !` (not a bare assignment) is what actually exempts this
-          # from the run step's default `set -e` -- a bare `x=$(cmd)` still
-          # aborts the whole script on failure before the log-fetch below
-          # ever runs, silently discarding notarytool's own submission ID.
-          if ! submission_output=$(xcrun notarytool submit huck-notarize-submission.zip \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --wait); then
-            submit_failed=1
-          else
-            submit_failed=0
-          fi
-          echo "$submission_output"
-          submission_id=$(echo "$submission_output" | awk '/id:/ { print $2; exit }')
-          # notarytool's own --wait output only ever says "Invalid" or
-          # "Accepted" -- the actual reasons live in a separate `log` call,
-          # not printed anywhere by default. Fetching it unconditionally
-          # beats guessing blind a second time. See docs/COMMENTS.md.
-          xcrun notarytool log "$submission_id" \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --team-id "$NOTARY_TEAM_ID" || true
-          if [ "$submit_failed" -eq 1 ]; then
-            echo "::error::Notarization failed -- see the log printed above."
-            exit 1
-          fi
-          xcrun stapler staple "Huck.app"
+          ./gradlew notarizePkg \
+            -Pcompose.desktop.mac.sign=true \
+            -Pcompose.desktop.mac.signing.identity="John Woodell (754T277KBJ)" \
+            -Pcompose.desktop.mac.notarization.appleID="$NOTARY_APPLE_ID" \
+            -Pcompose.desktop.mac.notarization.password="$NOTARY_PASSWORD" \
+            -Pcompose.desktop.mac.notarization.teamID="$NOTARY_TEAM_ID"
 
-      # Same --component-plist/pkgbuild shape as this repo's own `make pkg`
-      # target -- BundleIsVersionChecked forced false for the same reason
-      # (see this repo's Makefile comment): the Installer otherwise skips
-      # the copy if CFBundleVersion isn't strictly newer than what's
-      # already on disk. bundle_id/version are read from the .app's own
-      # Info.plist (jpackage-generated) rather than hardcoded, since this
-      # workflow has no independent source of truth for either.
-      - name: Build the installer .pkg
+      # Stapling should already happen as part of `notarizePkg`, but it's
+      # cheap and idempotent to confirm/reapply explicitly here rather than
+      # assume -- this is the first real run of this task against huck's
+      # actual jar-embedded-dylib case, and re-stapling an already-stapled
+      # .pkg is a harmless no-op.
+      - name: Confirm the .pkg is stapled
         run: |
-          bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "Huck.app/Contents/Info.plist")
-          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "Huck.app/Contents/Info.plist")
-          mkdir -p pkgroot/Applications
-          cp -R "Huck.app" "pkgroot/Applications/Huck.app"
-          cat > component.plist <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><array><dict>
-          <key>BundleHasStrictIdentifier</key><true/>
-          <key>BundleIsRelocatable</key><false/>
-          <key>BundleIsVersionChecked</key><false/>
-          <key>BundleOverwriteAction</key><string>upgrade</string>
-          <key>RootRelativeBundlePath</key><string>Applications/Huck.app</string>
-          </dict></array></plist>
-          PLIST
-          pkgbuild --root pkgroot \
-            --install-location / \
-            --component-plist component.plist \
-            --identifier "$bundle_id" \
-            --version "$version" \
-            --sign "Developer ID Installer: John Woodell (754T277KBJ)" \
-            "Huck-$version.pkg"
-          echo "PKG_PATH=Huck-$version.pkg" >> "$GITHUB_ENV"
-
-      - name: Notarize and staple the .pkg
-        env:
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-        run: |
-          xcrun notarytool submit "$PKG_PATH" \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --wait
-          xcrun stapler staple "$PKG_PATH"
+          pkg_path=$(ls build/compose/binaries/main/pkg/*.pkg)
+          xcrun stapler staple "$pkg_path"
+          echo "PKG_PATH=$pkg_path" >> "$GITHUB_ENV"
 
       # SIGNING_BRIDGE_TOKEN, not the default GITHUB_TOKEN -- this job's
-      # own token is scoped to zouk, with no access to huck's repo at all.
-      # Same fine-grained PAT huck's own workflow uses to trigger this
-      # dispatch in the first place. See docs/COMMENTS.md.
+      # own default token is scoped to zouk, with no access to huck's repo
+      # at all. Same fine-grained PAT huck's own workflow uses to trigger
+      # this dispatch in the first place. See docs/COMMENTS.md.
       - name: Attach the signed .pkg to Huck's GitHub Release
         env:
           GH_TOKEN: ${{ secrets.SIGNING_BRIDGE_TOKEN }}
