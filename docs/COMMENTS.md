@@ -36,22 +36,45 @@ whichever cert type it needs for whatever it's currently signing (the
 keychain, the same way `release.yml`'s own `CODESIGN_IDENTITY`/
 `INSTALLER_IDENTITY` split already works from one shared name.
 
-The `notarizePkg` Gradle task builds, signs, and notarizes the `.pkg` in
-one step. Because jpackage's own `--mac-sign` runs *during* packaging --
-before/while jars are assembled -- it can reach and correctly sign native
-libraries bundled inside a `.jar`, which is exactly what an external
-post-hoc `codesign` pass on an already-built `.app` cannot do. This is
-the actual reason for checking out and building huck's source here rather
-than just signing a downloaded artifact -- not just a way to avoid
-duplicating secrets into a second repo (though it does that too).
+Building the `.app` (via `createDistributable`) with Compose Desktop's
+`sign.set(true)` on is what actually matters: jpackage's own `--mac-sign`
+runs *during* packaging -- before/while jars are assembled -- so it can
+reach and correctly sign native libraries bundled inside a `.jar`, which
+is exactly what an external post-hoc `codesign` pass on an already-built
+`.app` cannot do. This is the actual reason for checking out and building
+huck's source here rather than just signing a downloaded artifact -- not
+just a way to avoid duplicating secrets into a second repo (though it
+does that too).
 
-Certs are imported the same way `release.yml`'s own "Import signing
-certificates" step already does -- same keychain, same account. Stapling
-is expected to already happen as part of `notarizePkg`, but the explicit
-`xcrun stapler staple` step afterward confirms/reapplies it defensively
-rather than assuming -- restapling an already-stapled `.pkg` is a
-harmless no-op, and this is the first real run of this approach against
-huck's actual jar-embedded-dylib case.
+### Not using `packagePkg`/`notarizePkg` for the `.pkg` itself
+The first version of this job (after the pivot to building from source)
+used Compose Desktop's `notarizePkg` Gradle task to build, sign, and
+notarize the `.pkg` in one step. That shipped in huck's v0.5.1 and
+installed Huck at `/Applications/app/Huck.app` instead of
+`/Applications/Huck.app` -- confirmed via `pkgutil --expand-full` +
+`lsbom` against the real installed `.pkg`: the outer `Distribution`'s
+`install-location` was correctly `/Applications`, but the package's own
+payload `Bom` stored every file under a literal `./app/Huck.app/...`
+prefix. Setting `nativeDistributions.macOS.installationPath` (v0.5.2)
+didn't touch this at all -- that property doesn't control the payload's
+internal structure, only (apparently) the `Distribution`'s own cosmetic
+`install-location` value. No upstream bug report found matching this, but
+the `lsbom` evidence is unambiguous: this is a real bug in Compose
+Multiplatform 1.11.0's `packagePkg`/`notarizePkg` task, not a config
+mistake on huck's end.
+
+Rather than chase a further DSL-level workaround for a task with a
+confirmed bug, this job now only uses Compose Desktop's DSL for the part
+that actually needed it (signing the `.app`, above), then hand-rolls the
+`.pkg` itself the same way this repo's own `Makefile`/`release.yml`
+already do successfully for zouk: notarize+staple the signed `.app`
+directly, `pkgbuild` a plain installer from it (`--install-location /`
++ a `component.plist` with `RootRelativeBundlePath` set explicitly, same
+shape as `make pkg`), then notarize+staple that `.pkg` separately. This
+is a smaller, better-understood surface than the old fully-external
+approach: the `.app` inside is already correctly signed by the time this
+job builds the installer around it, so there's no nested-dylib problem
+left to solve here, only a plain package build.
 
 `SIGNING_BRIDGE_TOKEN` is a single fine-grained PAT scoped to just this
 repo and `woodie/huck`, with Contents: Read and write on both (present as
