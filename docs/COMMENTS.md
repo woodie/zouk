@@ -9,6 +9,36 @@ When a code location kept its own one-line comment, it's noted below so
 this stays a complete map of "why," not a duplicate of what's already
 readable in the file.
 
+## .github/workflows/sign-huck-pkg.yml
+
+### Signing Huck's `.pkg` here, not in huck's own repo
+Huck (`woodie/huck`, a Kotlin/Compose port of this app for Windows/macOS)
+doesn't hold its own Developer ID certs or notarization credentials --
+rather than duplicate this repo's eight signing/notary secrets into a
+second repo, huck's release workflow uploads an unsigned `.app` to its
+own GitHub Release and fires a `repository_dispatch` here instead, with
+the release tag and the unsigned zip's download URL as payload. This job
+imports the exact same certs `release.yml`'s own "Import signing
+certificates" step does, signs/notarizes/`pkgbuild`s the downloaded
+`.app`, then uploads the result back onto huck's release with
+`SIGNING_BRIDGE_TOKEN` -- a single fine-grained PAT scoped to just this
+repo and `woodie/huck`, with Contents: Read and write on both (present as
+a secret in both repos, since a secret from one repo isn't visible to
+Actions runs in another).
+
+Entitlements are hand-written here (`allow-jit`/
+`allow-unsigned-executable-memory`/`disable-library-validation`) rather
+than reused from anywhere -- jpackage normally generates and applies its
+own default JVM entitlements automatically during its own `--mac-sign`
+step, but that's not available here since this signs the already-built
+`.app` externally, after the fact. `bundle_id`/`version` for `pkgbuild`
+are read from the downloaded `.app`'s own `Info.plist` rather than
+hardcoded, since this job has no independent source of truth for either
+(unlike this repo's own `Makefile`, which reads `Resources/Info.plist`
+directly since it's checked in). Untested end-to-end as of this writing
+(no way to exercise real codesign/notarization from this account's usual
+sandbox-based dev loop) -- first real huck tag push is the actual test.
+
 ## Resources/Info.plist
 
 ### `CFBundleDisplayName`
