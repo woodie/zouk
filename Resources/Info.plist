@@ -8,6 +8,8 @@
     <string>com.github.woodie.zouk</string>
     <key>CFBundleName</key>
     <string>zouk</string>
+    <key>CFBundleDisplayName</key>
+    <string>Zouk</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

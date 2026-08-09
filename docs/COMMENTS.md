@@ -9,6 +9,18 @@ When a code location kept its own one-line comment, it's noted below so
 this stays a complete map of "why," not a duplicate of what's already
 readable in the file.
 
+## Resources/Info.plist
+
+### `CFBundleDisplayName`
+`CFBundleName` is `"zouk"` (lowercase, matching the actual `CFBundleExecutable`/
+Swift Package Manager product name, which can't change without breaking the
+build) -- macOS's Dock, Cmd+Tab switcher, and Force Quit list all read that
+literal string, showing "zouk" instead of "Zouk". `ZoukApp.swift`'s custom
+About panel already works around this for that one surface (see its own note
+below), but doesn't touch the others. `CFBundleDisplayName` overrides the
+display string everywhere else macOS shows an app name, without needing to
+touch the real executable/product name (#8).
+
 ## Sources/ZoukKit/AppIconImage.swift
 
 ### `AppIcon` (enum)
