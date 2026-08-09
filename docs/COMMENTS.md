@@ -35,9 +35,39 @@ step, but that's not available here since this signs the already-built
 are read from the downloaded `.app`'s own `Info.plist` rather than
 hardcoded, since this job has no independent source of truth for either
 (unlike this repo's own `Makefile`, which reads `Resources/Info.plist`
-directly since it's checked in). Untested end-to-end as of this writing
-(no way to exercise real codesign/notarization from this account's usual
-sandbox-based dev loop) -- first real huck tag push is the actual test.
+directly since it's checked in).
+
+### `xattr -cr "Huck.app"` before signing
+The real first test (huck's v0.5.0 tag) notarized as "Invalid" -- at the
+time this fix was written, this job had no `notarytool log` step yet (see
+below, added in the same pass), so the specific rejection reason for
+*this* run was never actually seen, only inferred from documented
+precedent: jpackage-bundled JDKs commonly fail exactly this way on
+`Contents/runtime/Contents/MacOS/libjli.dylib` with "code has no
+resources but signature indicates they must be present," and the
+documented fix is stripping extended attributes before signing. The
+`.app` crosses a zip round-trip to get here (`ditto -c` on huck's runner,
+`curl` download, `ditto -x` here), which is a plausible way to pick up
+stray xattrs that desync a binary's on-disk resources from what its
+(pre-existing, from however the JDK itself was built) signature recorded.
+`xattr -cr` strips all of them recursively before this job's own
+`codesign` pass replaces that signature anyway, so this is defensive
+cleanup either way, not an attempt to preserve anything about the
+original signature -- but if notarization still fails after this, the
+`notarytool log` addition below is what actually confirms or rules this
+out next time, rather than another guess.
+
+### `notarytool log`, fetched unconditionally, not just presumed on failure
+`xcrun notarytool submit --wait`'s own output only ever says "Invalid" or
+"Accepted" -- never *why*. The submission ID needed for `notarytool log`
+only exists in that same command's output, which is why this captures it
+into `submission_output` first (via `if ! submission_output=$(...); then`,
+not a bare `x=$(...)` -- the latter still aborts the whole `run:` step on
+failure under GitHub Actions' default `set -e`, before the log-fetch
+below ever runs) rather than letting a failed submission short-circuit
+straight to a red X with no diagnostic. The step still fails loudly
+afterward (`exit 1`) if the submission itself failed -- fetching the log
+is diagnostic, not a way to paper over a real failure.
 
 ## Resources/Info.plist
 

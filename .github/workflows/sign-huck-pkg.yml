@@ -51,6 +51,14 @@ jobs:
         run: |
           curl -fsSL -o huck-unsigned.zip "${{ github.event.client_payload.zip_url }}"
           ditto -x -k huck-unsigned.zip .
+          # Extended attributes picked up by the zip round-trip (built via
+          # ditto on huck's runner, downloaded via curl, extracted via ditto
+          # here) can leave stray xattrs on nested binaries -- a well-
+          # documented cause of "code has no resources but signature
+          # indicates they must be present" / notarization "Invalid" for
+          # jpackage's bundled JDK dylibs (libjli.dylib in particular). See
+          # docs/COMMENTS.md.
+          xattr -cr "Huck.app"
 
       # jpackage-built apps need explicit JVM hardened-runtime entitlements
       # (JIT/unsigned executable memory/library validation) that jpackage's
@@ -83,11 +91,33 @@ jobs:
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
           ditto -c -k --keepParent "Huck.app" huck-notarize-submission.zip
-          xcrun notarytool submit huck-notarize-submission.zip \
+          # `if !` (not a bare assignment) is what actually exempts this
+          # from the run step's default `set -e` -- a bare `x=$(cmd)` still
+          # aborts the whole script on failure before the log-fetch below
+          # ever runs, silently discarding notarytool's own submission ID.
+          if ! submission_output=$(xcrun notarytool submit huck-notarize-submission.zip \
             --apple-id "$NOTARY_APPLE_ID" \
             --password "$NOTARY_PASSWORD" \
             --team-id "$NOTARY_TEAM_ID" \
-            --wait
+            --wait); then
+            submit_failed=1
+          else
+            submit_failed=0
+          fi
+          echo "$submission_output"
+          submission_id=$(echo "$submission_output" | awk '/id:/ { print $2; exit }')
+          # notarytool's own --wait output only ever says "Invalid" or
+          # "Accepted" -- the actual reasons live in a separate `log` call,
+          # not printed anywhere by default. Fetching it unconditionally
+          # beats guessing blind a second time. See docs/COMMENTS.md.
+          xcrun notarytool log "$submission_id" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" || true
+          if [ "$submit_failed" -eq 1 ]; then
+            echo "::error::Notarization failed -- see the log printed above."
+            exit 1
+          fi
           xcrun stapler staple "Huck.app"
 
       # Same --component-plist/pkgbuild shape as this repo's own `make pkg`
