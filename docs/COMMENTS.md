@@ -11,63 +11,57 @@ readable in the file.
 
 ## .github/workflows/sign-huck-pkg.yml
 
-### Signing Huck's `.pkg` here, not in huck's own repo
+### Building Huck's `.pkg` here, from huck's own source
 Huck (`woodie/huck`, a Kotlin/Compose port of this app for Windows/macOS)
-doesn't hold its own Developer ID certs or notarization credentials --
-rather than duplicate this repo's eight signing/notary secrets into a
-second repo, huck's release workflow uploads an unsigned `.app` to its
-own GitHub Release and fires a `repository_dispatch` here instead, with
-the release tag and the unsigned zip's download URL as payload. This job
-imports the exact same certs `release.yml`'s own "Import signing
-certificates" step does, signs/notarizes/`pkgbuild`s the downloaded
-`.app`, then uploads the result back onto huck's release with
-`SIGNING_BRIDGE_TOKEN` -- a single fine-grained PAT scoped to just this
+doesn't hold its own Developer ID certs or notarization credentials. The
+first version of this job downloaded a pre-built unsigned `.app` from
+huck's release and signed it here externally with `codesign --deep` --
+that failed real notarization (see git history on this file for the old
+approach): `--deep` doesn't properly sign most nested dylibs, and one of
+Huck's native libraries (Skiko's `libskiko-macos-*.dylib`) ships bundled
+*inside a `.jar`*, which no external `codesign` call can reach into at
+all, signed or not.
+
+This version instead checks out *huck's own source* at the dispatched tag
+(`actions/checkout@v4` with `repository`/`ref` pointed at huck) and runs
+huck's real Gradle build on this runner, using Compose Desktop's own
+official macOS signing/notarization support -- `sign.set(true)` /
+`identity` / `appleID` / `password` / `teamId`, driven here entirely
+through `-Pcompose.desktop.mac.*` command-line properties rather than
+anything hardcoded into huck's `build.gradle.kts`. `identity` is set to
+just the shared "John Woodell (754T277KBJ)" portion of both this repo's
+Developer ID certs (Application and Installer) -- jpackage looks up
+whichever cert type it needs for whatever it's currently signing (the
+`.app` vs. the final `.pkg`) by matching that string against the
+keychain, the same way `release.yml`'s own `CODESIGN_IDENTITY`/
+`INSTALLER_IDENTITY` split already works from one shared name.
+
+The `notarizePkg` Gradle task builds, signs, and notarizes the `.pkg` in
+one step. Because jpackage's own `--mac-sign` runs *during* packaging --
+before/while jars are assembled -- it can reach and correctly sign native
+libraries bundled inside a `.jar`, which is exactly what an external
+post-hoc `codesign` pass on an already-built `.app` cannot do. This is
+the actual reason for checking out and building huck's source here rather
+than just signing a downloaded artifact -- not just a way to avoid
+duplicating secrets into a second repo (though it does that too).
+
+Certs are imported the same way `release.yml`'s own "Import signing
+certificates" step already does -- same keychain, same account. Stapling
+is expected to already happen as part of `notarizePkg`, but the explicit
+`xcrun stapler staple` step afterward confirms/reapplies it defensively
+rather than assuming -- restapling an already-stapled `.pkg` is a
+harmless no-op, and this is the first real run of this approach against
+huck's actual jar-embedded-dylib case.
+
+`SIGNING_BRIDGE_TOKEN` is a single fine-grained PAT scoped to just this
 repo and `woodie/huck`, with Contents: Read and write on both (present as
 a secret in both repos, since a secret from one repo isn't visible to
-Actions runs in another).
-
-Entitlements are hand-written here (`allow-jit`/
-`allow-unsigned-executable-memory`/`disable-library-validation`) rather
-than reused from anywhere -- jpackage normally generates and applies its
-own default JVM entitlements automatically during its own `--mac-sign`
-step, but that's not available here since this signs the already-built
-`.app` externally, after the fact. `bundle_id`/`version` for `pkgbuild`
-are read from the downloaded `.app`'s own `Info.plist` rather than
-hardcoded, since this job has no independent source of truth for either
-(unlike this repo's own `Makefile`, which reads `Resources/Info.plist`
-directly since it's checked in).
-
-### `xattr -cr "Huck.app"` before signing
-The real first test (huck's v0.5.0 tag) notarized as "Invalid" -- at the
-time this fix was written, this job had no `notarytool log` step yet (see
-below, added in the same pass), so the specific rejection reason for
-*this* run was never actually seen, only inferred from documented
-precedent: jpackage-bundled JDKs commonly fail exactly this way on
-`Contents/runtime/Contents/MacOS/libjli.dylib` with "code has no
-resources but signature indicates they must be present," and the
-documented fix is stripping extended attributes before signing. The
-`.app` crosses a zip round-trip to get here (`ditto -c` on huck's runner,
-`curl` download, `ditto -x` here), which is a plausible way to pick up
-stray xattrs that desync a binary's on-disk resources from what its
-(pre-existing, from however the JDK itself was built) signature recorded.
-`xattr -cr` strips all of them recursively before this job's own
-`codesign` pass replaces that signature anyway, so this is defensive
-cleanup either way, not an attempt to preserve anything about the
-original signature -- but if notarization still fails after this, the
-`notarytool log` addition below is what actually confirms or rules this
-out next time, rather than another guess.
-
-### `notarytool log`, fetched unconditionally, not just presumed on failure
-`xcrun notarytool submit --wait`'s own output only ever says "Invalid" or
-"Accepted" -- never *why*. The submission ID needed for `notarytool log`
-only exists in that same command's output, which is why this captures it
-into `submission_output` first (via `if ! submission_output=$(...); then`,
-not a bare `x=$(...)` -- the latter still aborts the whole `run:` step on
-failure under GitHub Actions' default `set -e`, before the log-fetch
-below ever runs) rather than letting a failed submission short-circuit
-straight to a red X with no diagnostic. The step still fails loudly
-afterward (`exit 1`) if the submission itself failed -- fetching the log
-is diagnostic, not a way to paper over a real failure.
+Actions runs in another). Both directions actually need that write
+access: huck's own workflow needs Contents: write on this repo to fire
+the `repository_dispatch` that triggers this job (confirmed against
+GitHub's fine-grained PAT permission docs, not assumed), and this job
+needs Contents: write on huck to upload the signed `.pkg` back onto its
+release.
 
 ## Resources/Info.plist
 
