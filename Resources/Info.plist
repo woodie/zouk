@@ -8,7 +8,6 @@
     <string>com.github.woodie.zouk</string>
     <key>CFBundleName</key>
     <string>zouk</string>
-    <!-- Dock/Cmd+Tab/Force Quit name, distinct from CFBundleName below -- see docs/COMMENTS.md. -->
     <key>CFBundleDisplayName</key>
     <string>Zouk</string>
     <key>CFBundleIconFile</key>
