@@ -88,15 +88,26 @@ release.
 
 ## Resources/Info.plist
 
-### `CFBundleDisplayName`
-`CFBundleName` is `"zouk"` (lowercase, matching the actual `CFBundleExecutable`/
-Swift Package Manager product name, which can't change without breaking the
-build) -- macOS's Dock, Cmd+Tab switcher, and Force Quit list all read that
-literal string, showing "zouk" instead of "Zouk". `ZoukApp.swift`'s custom
-About panel already works around this for that one surface (see its own note
-below), but doesn't touch the others. `CFBundleDisplayName` overrides the
-display string everywhere else macOS shows an app name, without needing to
-touch the real executable/product name (#8).
+### `CFBundleName`/`CFBundleDisplayName`
+`CFBundleName` was left lowercase (`"zouk"`) at first on the assumption it
+had to match `CFBundleExecutable`/the SwiftPM product name -- that
+assumption was wrong (they're independent keys; a repo-wide grep confirms
+nothing in `Makefile`/`.github/workflows`/`Casks/zouk.rb` reads
+`CFBundleName` at all, only `CFBundleExecutable` for the actual binary
+filename). Left lowercase, it showed up as "zouk" in the Dock, Cmd+Tab
+switcher, and Force Quit list. `CFBundleDisplayName` (#8) fixed those three
+plus, confirmed against a real screenshot, the automatic "Hide Zouk"/"Quit
+Zouk" menu items too -- but not the bold application-menu title itself
+(the word next to the Apple logo), which macOS derives from `CFBundleName`
+specifically for that one surface (confirmed against Apple's own developer
+forums). A runtime attempt at that last surface
+(`NSApp.mainMenu?.items.first?.title = ...` in `ZoukApp.swift`'s
+`AppDelegate`) turned out not to work on a real `make run` build --
+SwiftUI's own menu construction apparently wins whatever ordering that
+relied on. The actual fix was simpler: `CFBundleName` is `"Zouk"` now too.
+That makes it redundant with `CFBundleDisplayName`, which is left in place
+anyway rather than removed -- it's a separately confirmed-working fix for
+its own three surfaces, and touching it isn't needed to fix this one.
 
 ## Sources/ZoukKit/AppIconImage.swift
 
@@ -707,23 +718,13 @@ Forcing activation on launch fixes that.
 Kept a one-line comment in place: "Also sets the Dock icon for swift
 run/dev launches, not just the bundled .app."
 
-### `NSApp.mainMenu?.items.first?.title = AppInfo.shortName`
-Kept a one-line comment in place: "The menu bar's application menu
-reads CFBundleName ("zouk"), not CFBundleDisplayName."
-
-Full history: `CFBundleDisplayName` (added for #8) fixes the Dock,
-Cmd+Tab switcher, and Force Quit list, and -- confirmed against a real
-screenshot -- the automatic "Hide Zouk"/"Quit Zouk" items too. It does
-*not* reach the bold application-menu title itself (the word "zouk"
-shown next to the Apple logo), which macOS derives from the real
-`CFBundleName` for that one surface specifically -- confirmed against
-Apple's own developer forums, not assumed. SwiftUI has no `Scene`/
-`Commands` API to set that title either, so this sets it directly on
-`NSApp.mainMenu`'s first item, the same AppKit escape hatch the
-`AppDelegate` already uses for the Dock icon above. `items.first` is
-the application menu itself (an `NSMenuItem` whose own `.title` is what
-renders in the menu bar); its `.submenu` holds About/Hide/Quit and
-isn't what's being renamed here.
+A `NSApp.mainMenu?.items.first?.title = AppInfo.shortName` line was tried
+here too, to fix the bold application-menu title staying "zouk" even with
+`CFBundleDisplayName` set -- confirmed on a real `make run` build *not* to
+work (SwiftUI's own menu construction apparently wins whatever ordering
+that relied on), so it was reverted. See `Resources/Info.plist`'s own note
+for the fix that actually worked (`CFBundleName` itself, not a runtime
+AppKit call).
 
 ## Tests/ZoukKitTests/AppInfoSpec.swift
 

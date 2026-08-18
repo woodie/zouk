@@ -39,7 +39,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         // Also sets the Dock icon for swift run/dev launches, not just the bundled .app.
         NSApp.applicationIconImage = AppIcon.nsImage
-        // The menu bar's application menu reads CFBundleName ("zouk"), not CFBundleDisplayName.
-        NSApp.mainMenu?.items.first?.title = AppInfo.shortName
     }
 }
