@@ -128,6 +128,23 @@ this is just a defensive fallback." Should never actually trigger --
 `Resources/AppIcon.png` ships with the package -- but falls back to an
 SF Symbol rather than a blank space if it's ever missing.
 
+## Sources/ZoukKit/AppInfo.swift
+
+### `AppInfo` (enum), `shortName`/`fullName`
+Extracted out of `ZoukApp.swift` so the strings its `WindowGroup` title,
+About menu item, and About panel `applicationName` are all built from have
+one source, and so a test can actually reach them -- `ZoukApp.swift` lives
+in the `zouk` executable target, which `Tests/ZoukKitTests` can't
+`@testable import` (see `Package.swift`'s own comment on that caveat;
+`AppInfoSpec.swift` below is what actually exercises these two constants).
+
+`shortName` ("Zouk") matches what macOS's own app-menu shows for "Hide
+Zouk"/"Quit Zouk" (`CFBundleName`, auto-capitalized by AppKit) -- also used
+for the About item's own label now, rather than that one item alone
+carrying the full name while its siblings stayed short. `fullName` ("Zouk
+scan retriever") is derived from `shortName`, not a second independent
+literal, so the two can't drift apart silently.
+
 ## Sources/ZoukKit/AppModel.swift
 
 ### `ScanFetching` (protocol) and `extension ScanClient: ScanFetching`
@@ -661,14 +678,23 @@ gate.
 ## Sources/zouk/ZoukApp.swift
 
 ### `ZoukApp.body`, `CommandGroup(replacing: .appInfo)`
-Kept a one-line comment in place: "Replaces the default About item so
-it shows our full name + credits, not the raw CFBundleName."
+Kept a one-line comment in place: "Menu label stays short to match
+"Hide Zouk"/"Quit Zouk"; the panel still shows the full name."
 
 Full history: replaces the default "About zouk" item (which would
 otherwise show the bundle's literal `CFBundleName`, "zouk") with one
-that calls the same native panel, just with our full display name and a
+that calls the same native panel, with our full display name and a
 copyright credits line -- no separate custom About window/sheet to
-build or maintain.
+build or maintain. The button's own title started out as the full
+"About Zouk scan retriever" too, matching the panel it opens, until a
+side-by-side against huck (which has no way to give its equivalent
+system menu item independently custom text, only a whole-app rename
+that would also lengthen "Hide"/"Quit") showed that mismatch: huck's
+real "About Huck"/"Hide Huck"/"Quit Huck" can only ever agree with
+zouk's menu if zouk's own three items agree with each other too. Short
+label, full panel content was the fix on this side; `AppInfo.swift`
+holds both strings so `AppInfoSpec.swift` can pin the exact values and
+their relationship.
 
 ### `AppDelegate` (class)
 `swift run` launches zouk as a bare process with no `.app` bundle, so
@@ -680,6 +706,26 @@ Forcing activation on launch fixes that.
 ### `AppDelegate.applicationDidFinishLaunching(_:)`
 Kept a one-line comment in place: "Also sets the Dock icon for swift
 run/dev launches, not just the bundled .app."
+
+## Tests/ZoukKitTests/AppInfoSpec.swift
+
+### Why this exists, and why it's a `QuickSpec` over `AppInfo` and not `ZoukApp`
+Guards the exact strings `ZoukApp.swift`'s `WindowGroup` title, About menu
+item, and About panel `applicationName` are built from -- `ZoukApp` itself
+can't be under test at all here: it's `@main` in the `zouk` executable
+target, and `Package.swift` only wires `@testable import` access up for the
+`ZoukKit` library target (see its own comment). `AppInfo.swift` living in
+`ZoukKit` is what makes any of this reachable from a spec in the first
+place. huck's equivalent (`AppInfoSpec.kt`) doesn't need that split --
+`Main.kt` (`src/main`) is directly visible to its `src/test` source set in
+the same Gradle module/compilation, no separate testable target needed.
+
+Three checks, not one: `shortName == "Zouk"` and `fullName == "Zouk scan
+retriever"` each pin a literal a future edit could silently change, and a
+third checks `fullName == "\(shortName) scan retriever"` -- the
+relationship itself, so renaming `shortName` without updating the panel
+text it feeds (or vice versa) fails even if each individual literal still
+looked plausible on its own.
 
 ## Tests/ZoukKitTests/AppModelSpec.swift
 
