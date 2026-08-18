@@ -8,16 +8,18 @@ struct ZoukApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("Zouk scan retriever") {
+        WindowGroup(AppInfo.fullName) {
             ContentView()
         }
         .windowResizability(.contentSize)
         .commands {
-            // Replaces the default About item so it shows our full name + credits, not the raw CFBundleName.
+            // Replaces the default About item. Menu label stays short (AppInfo.shortName) to
+            // match the "Hide Zouk"/"Quit Zouk" items alongside it -- only the panel this opens
+            // shows the full name + credits, via applicationName below, not the raw CFBundleName.
             CommandGroup(replacing: .appInfo) {
-                Button("About Zouk scan retriever") {
+                Button("About \(AppInfo.shortName)") {
                     NSApplication.shared.orderFrontStandardAboutPanel(options: [
-                        .applicationName: "Zouk scan retriever",
+                        .applicationName: AppInfo.fullName,
                         .credits: NSAttributedString(
                             string: "© \(currentYear) John Woodell",
                             attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]
