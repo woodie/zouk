@@ -13,9 +13,7 @@ struct ZoukApp: App {
         }
         .windowResizability(.contentSize)
         .commands {
-            // Replaces the default About item. Menu label stays short (AppInfo.shortName) to
-            // match the "Hide Zouk"/"Quit Zouk" items alongside it -- only the panel this opens
-            // shows the full name + credits, via applicationName below, not the raw CFBundleName.
+            // Menu label stays short to match "Hide Zouk"/"Quit Zouk"; the panel still shows the full name.
             CommandGroup(replacing: .appInfo) {
                 Button("About \(AppInfo.shortName)") {
                     NSApplication.shared.orderFrontStandardAboutPanel(options: [

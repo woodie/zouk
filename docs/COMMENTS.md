@@ -678,11 +678,8 @@ gate.
 ## Sources/zouk/ZoukApp.swift
 
 ### `ZoukApp.body`, `CommandGroup(replacing: .appInfo)`
-Kept a one-line comment in place: "Replaces the default About item.
-Menu label stays short (AppInfo.shortName) to match the "Hide
-Zouk"/"Quit Zouk" items alongside it -- only the panel this opens
-shows the full name + credits, via applicationName below, not the raw
-CFBundleName."
+Kept a one-line comment in place: "Menu label stays short to match
+"Hide Zouk"/"Quit Zouk"; the panel still shows the full name."
 
 Full history: replaces the default "About zouk" item (which would
 otherwise show the bundle's literal `CFBundleName`, "zouk") with one

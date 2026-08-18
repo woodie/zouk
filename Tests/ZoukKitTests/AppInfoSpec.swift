@@ -3,11 +3,7 @@ import Quick
 import Nimble
 @testable import ZoukKit
 
-// Guards ZoukApp.swift's three name usages (WindowGroup title, About menu item, About panel's
-// applicationName) via the shared constants they're built from -- ZoukApp.swift itself lives in
-// the "zouk" executable target and isn't reachable from this test target at all (see
-// Package.swift's own comment, and AppInfo.swift's). huck's equivalent (AppInfoSpec.kt) doesn't
-// need that indirection: its Main.kt is directly visible to its own test source set.
+// Guards the constants ZoukApp.swift's title/menu/About-panel text are built from.
 final class AppInfoSpec: QuickSpec {
     override class func spec() {
         describe("AppInfo") {
