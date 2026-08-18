@@ -86,6 +86,28 @@ GitHub's fine-grained PAT permission docs, not assumed), and this job
 needs Contents: write on huck to upload the signed `.pkg` back onto its
 release.
 
+## Makefile
+
+### `bundle`, the `$(RM) "$(BUNDLE_DIR)"` line
+Root cause of a real crash hit while testing the `CFBundleName` fix below:
+`make run` (`killall` -> `bundle` -> `open -n`) failed at the `open -n` step
+with `Error Domain=RBSRequestErrorDomain Code=5 "Launch failed."` /
+`NSPOSIXErrorDomain Code=162 "Launchd job spawn failed"`. Inspecting the
+existing `.build/zouk.app` showed why: its `Contents/_CodeSignature/
+CodeResources` was ten days old, left over from an earlier `make sign`/
+`make pkg` run (the "Pkg hand rolled" work), while `Contents/MacOS/zouk` and
+`Contents/Info.plist` were from today's fresh unsigned `bundle` run --
+`bundle` only ever overwrites individual files via `cp -f`, it never removed
+`Contents/_CodeSignature`, so a signed bundle's leftover signature manifest
+kept sitting there next to newer, unsigned, non-matching contents. macOS
+reads that stale manifest, treats the bundle as signed, hashes don't match,
+and refuses to spawn it at all -- a launch-time refusal, not the
+`docs/crash.txt` SIGKILL (that one is a *running*, already-launched process
+getting its mapped binary overwritten out from under it; this is a bundle
+that never got the chance to launch). Fix: `bundle` now deletes the whole
+`$(BUNDLE_DIR)` before recreating it, so a prior `sign`/`pkg` run can never
+leave stale signature state for a later unsigned `bundle`/`run` to trip over.
+
 ## Resources/Info.plist
 
 ### `CFBundleName`/`CFBundleDisplayName`

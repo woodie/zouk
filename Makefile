@@ -83,9 +83,11 @@ check:
 # instead). `make run` instead assembles a minimal zouk.app and opens it
 # the normal way, so macOS activates it like any other Mac app.
 .PHONY: bundle
+# Wipes $(BUNDLE_DIR) first so a prior `make sign`/`make pkg`'s stale Contents/_CodeSignature can't outlive this rebuild -- see docs/COMMENTS.md.
 bundle:
 	$(SWIFT) build $(SWIFT_BUILD_FLAGS)
 	$(eval BUILD_DIRECTORY := $(shell $(SWIFT) build --show-bin-path $(SWIFT_BUILD_FLAGS)))
+	$(RM) "$(BUNDLE_DIR)"
 	$(MKDIR) "$(BUNDLE_DIR)/Contents/MacOS"
 	$(MKDIR) "$(BUNDLE_DIR)/Contents/Resources"
 	$(CP) "$(BUILD_DIRECTORY)/$(PRODUCT_NAME)" "$(BUNDLE_DIR)/Contents/MacOS/$(PRODUCT_NAME)"
