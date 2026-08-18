@@ -707,6 +707,24 @@ Forcing activation on launch fixes that.
 Kept a one-line comment in place: "Also sets the Dock icon for swift
 run/dev launches, not just the bundled .app."
 
+### `NSApp.mainMenu?.items.first?.title = AppInfo.shortName`
+Kept a one-line comment in place: "The menu bar's application menu
+reads CFBundleName ("zouk"), not CFBundleDisplayName."
+
+Full history: `CFBundleDisplayName` (added for #8) fixes the Dock,
+Cmd+Tab switcher, and Force Quit list, and -- confirmed against a real
+screenshot -- the automatic "Hide Zouk"/"Quit Zouk" items too. It does
+*not* reach the bold application-menu title itself (the word "zouk"
+shown next to the Apple logo), which macOS derives from the real
+`CFBundleName` for that one surface specifically -- confirmed against
+Apple's own developer forums, not assumed. SwiftUI has no `Scene`/
+`Commands` API to set that title either, so this sets it directly on
+`NSApp.mainMenu`'s first item, the same AppKit escape hatch the
+`AppDelegate` already uses for the Dock icon above. `items.first` is
+the application menu itself (an `NSMenuItem` whose own `.title` is what
+renders in the menu bar); its `.submenu` holds About/Hide/Quit and
+isn't what's being renamed here.
+
 ## Tests/ZoukKitTests/AppInfoSpec.swift
 
 ### Why this exists, and why it's a `QuickSpec` over `AppInfo` and not `ZoukApp`
