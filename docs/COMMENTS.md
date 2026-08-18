@@ -86,17 +86,50 @@ GitHub's fine-grained PAT permission docs, not assumed), and this job
 needs Contents: write on huck to upload the signed `.pkg` back onto its
 release.
 
+## Makefile
+
+### `bundle`, the `$(RM) "$(BUNDLE_DIR)"` line
+Root cause of a real crash hit while testing the `CFBundleName` fix below:
+`make run` (`killall` -> `bundle` -> `open -n`) failed at the `open -n` step
+with `Error Domain=RBSRequestErrorDomain Code=5 "Launch failed."` /
+`NSPOSIXErrorDomain Code=162 "Launchd job spawn failed"`. Inspecting the
+existing `.build/zouk.app` showed why: its `Contents/_CodeSignature/
+CodeResources` was ten days old, left over from an earlier `make sign`/
+`make pkg` run (the "Pkg hand rolled" work), while `Contents/MacOS/zouk` and
+`Contents/Info.plist` were from today's fresh unsigned `bundle` run --
+`bundle` only ever overwrites individual files via `cp -f`, it never removed
+`Contents/_CodeSignature`, so a signed bundle's leftover signature manifest
+kept sitting there next to newer, unsigned, non-matching contents. macOS
+reads that stale manifest, treats the bundle as signed, hashes don't match,
+and refuses to spawn it at all -- a launch-time refusal, not the
+`docs/crash.txt` SIGKILL (that one is a *running*, already-launched process
+getting its mapped binary overwritten out from under it; this is a bundle
+that never got the chance to launch). Fix: `bundle` now deletes the whole
+`$(BUNDLE_DIR)` before recreating it, so a prior `sign`/`pkg` run can never
+leave stale signature state for a later unsigned `bundle`/`run` to trip over.
+
 ## Resources/Info.plist
 
-### `CFBundleDisplayName`
-`CFBundleName` is `"zouk"` (lowercase, matching the actual `CFBundleExecutable`/
-Swift Package Manager product name, which can't change without breaking the
-build) -- macOS's Dock, Cmd+Tab switcher, and Force Quit list all read that
-literal string, showing "zouk" instead of "Zouk". `ZoukApp.swift`'s custom
-About panel already works around this for that one surface (see its own note
-below), but doesn't touch the others. `CFBundleDisplayName` overrides the
-display string everywhere else macOS shows an app name, without needing to
-touch the real executable/product name (#8).
+### `CFBundleName`/`CFBundleDisplayName`
+`CFBundleName` was left lowercase (`"zouk"`) at first on the assumption it
+had to match `CFBundleExecutable`/the SwiftPM product name -- that
+assumption was wrong (they're independent keys; a repo-wide grep confirms
+nothing in `Makefile`/`.github/workflows`/`Casks/zouk.rb` reads
+`CFBundleName` at all, only `CFBundleExecutable` for the actual binary
+filename). Left lowercase, it showed up as "zouk" in the Dock, Cmd+Tab
+switcher, and Force Quit list. `CFBundleDisplayName` (#8) fixed those three
+plus, confirmed against a real screenshot, the automatic "Hide Zouk"/"Quit
+Zouk" menu items too -- but not the bold application-menu title itself
+(the word next to the Apple logo), which macOS derives from `CFBundleName`
+specifically for that one surface (confirmed against Apple's own developer
+forums). A runtime attempt at that last surface
+(`NSApp.mainMenu?.items.first?.title = ...` in `ZoukApp.swift`'s
+`AppDelegate`) turned out not to work on a real `make run` build --
+SwiftUI's own menu construction apparently wins whatever ordering that
+relied on. The actual fix was simpler: `CFBundleName` is `"Zouk"` now too.
+That makes it redundant with `CFBundleDisplayName`, which is left in place
+anyway rather than removed -- it's a separately confirmed-working fix for
+its own three surfaces, and touching it isn't needed to fix this one.
 
 ## Sources/ZoukKit/AppIconImage.swift
 
@@ -706,6 +739,14 @@ Forcing activation on launch fixes that.
 ### `AppDelegate.applicationDidFinishLaunching(_:)`
 Kept a one-line comment in place: "Also sets the Dock icon for swift
 run/dev launches, not just the bundled .app."
+
+A `NSApp.mainMenu?.items.first?.title = AppInfo.shortName` line was tried
+here too, to fix the bold application-menu title staying "zouk" even with
+`CFBundleDisplayName` set -- confirmed on a real `make run` build *not* to
+work (SwiftUI's own menu construction apparently wins whatever ordering
+that relied on), so it was reverted. See `Resources/Info.plist`'s own note
+for the fix that actually worked (`CFBundleName` itself, not a runtime
+AppKit call).
 
 ## Tests/ZoukKitTests/AppInfoSpec.swift
 
