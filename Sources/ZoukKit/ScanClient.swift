@@ -51,9 +51,23 @@ public actor ScanClient {
         request.httpMethod = "PROPFIND"
         request.setValue("1", forHTTPHeaderField: "Depth")
         let (data, response) = try await session.data(for: request)
+        if (response as? HTTPURLResponse)?.statusCode == 405 {
+            return try await fetchLegacyListing()
+        }
         try Self.checkOK(response)
         return try WebDAVListing.entries(from: data).sorted {
             ($0.downloadedAt ?? .distantPast) > ($1.downloadedAt ?? .distantPast)
+        }
+    }
+
+    // Until lambada#21 retires it, lambada-web answers PROPFIND with 405 but still serves files.json.
+    private func fetchLegacyListing() async throws -> [ScanEntry] {
+        do {
+            let (data, response) = try await session.data(from: baseURL.appendingPathComponent("files.json"))
+            try Self.checkOK(response)
+            return try JSONDecoder().decode([ScanEntry].self, from: data)
+        } catch {
+            throw ScanClientError.server(405)
         }
     }
 

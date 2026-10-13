@@ -89,6 +89,34 @@ final class ScanClientSpec: AsyncSpec {
                     }
                 }
 
+                context("when the server only speaks the old files.json protocol") {
+                    var scans: [ScanEntry]!
+                    var legacyURL: URL!
+
+                    beforeEach {
+                        fakeSession.requestHandler = { sent in
+                            let response = HTTPURLResponse(url: sent.url!, statusCode: 405, httpVersion: nil, headerFields: nil)!
+                            return (Data(), response)
+                        }
+                        let body = try! JSONEncoder().encode([scan])
+                        fakeSession.dataHandler = { url in
+                            legacyURL = url
+                            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                            return (body, response)
+                        }
+                    }
+
+                    justBeforeEach { scans = try await client.fetchScans() }
+
+                    it("falls back to files.json under baseURL") {
+                        expect(legacyURL?.absoluteString).to(equal("http://scans.example.com/files.json"))
+                    }
+
+                    it("returns the scans files.json lists") {
+                        expect(scans).to(equal([scan]))
+                    }
+                }
+
                 context("when the server doesn't speak WebDAV") {
                     beforeEach {
                         fakeSession.requestHandler = { sent in
@@ -97,7 +125,7 @@ final class ScanClientSpec: AsyncSpec {
                         }
                     }
 
-                    it("throws ScanClientError.server(405), which explains there's no WebDAV listing") {
+                    it("throws ScanClientError.server(405) when files.json isn't there either") {
                         await expect { try await client.fetchScans() }.to(throwError(ScanClientError.server(405)))
                         expect(ScanClientError.server(405).errorDescription).to(contain("WebDAV"))
                     }

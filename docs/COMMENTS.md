@@ -544,6 +544,14 @@ the decoded last path component of `href`; an unreadable
 `getlastmodified` leaves `time` empty, so the entry shows "an unknown
 time".
 
+### `ScanClient.fetchLegacyListing()`
+Temporary. lambada-web answers `PROPFIND` with 405 but still serves
+`/files.json`, so on a 405 the listing falls back to it. That lets this
+release go onto a Mac before the server switches to WebDAV (lambada
+#21). Any failure there is reported as the original 405. Remove it, with
+`ScanEntry`'s `Codable` conformance if nothing else needs it, once
+lambada-web is gone.
+
 ### `ScanClient.folderURL(_:)`
 `PROPFIND` on a folder address without its trailing slash gets a
 redirect to the slashed address, and following that redirect turns the
