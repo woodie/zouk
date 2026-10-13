@@ -8,6 +8,8 @@ public enum ScanClientError: Error, LocalizedError, Equatable {
         switch self {
         case .invalidResponse:
             return "The server sent back something that wasn't a valid scan list."
+        case .server(405):
+            return "The server doesn't offer a WebDAV listing at that address (status 405)."
         case .server(let code):
             return "The server responded with status \(code)."
         }
@@ -45,10 +47,20 @@ public actor ScanClient {
     }
 
     public func fetchScans() async throws -> [ScanEntry] {
-        let listURL = baseURL.appendingPathComponent("files.json")
-        let (data, response) = try await session.data(from: listURL)
+        var request = URLRequest(url: Self.folderURL(baseURL))
+        request.httpMethod = "PROPFIND"
+        request.setValue("1", forHTTPHeaderField: "Depth")
+        let (data, response) = try await session.data(for: request)
         try Self.checkOK(response)
-        return try JSONDecoder().decode([ScanEntry].self, from: data)
+        return try WebDAVListing.entries(from: data).sorted {
+            ($0.downloadedAt ?? .distantPast) > ($1.downloadedAt ?? .distantPast)
+        }
+    }
+
+    // A folder URL without its trailing slash gets a redirect, which turns PROPFIND into GET.
+    nonisolated static func folderURL(_ url: URL) -> URL {
+        let absolute = url.absoluteString
+        return absolute.hasSuffix("/") ? url : URL(string: absolute + "/") ?? url
     }
 
     // Re-downloads on a scan.size mismatch instead of trusting a stale same-named cache entry.
@@ -82,7 +94,7 @@ public actor ScanClient {
         return destination
     }
 
-    // DELETE on the same path GET uses to download; lambada-web shares one route for both verbs.
+    // DELETE on the file's own WebDAV address, the same one GET downloads from.
     public func delete(_ scan: ScanEntry) async throws {
         guard let remote = URL(string: scan.path, relativeTo: baseURL) else {
             throw ScanClientError.invalidResponse

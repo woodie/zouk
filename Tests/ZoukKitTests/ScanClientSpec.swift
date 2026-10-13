@@ -17,45 +17,89 @@ final class ScanClientSpec: AsyncSpec {
             describe("#fetchScans()") {
                 var fakeSession: FakeHTTPClient!
                 var client: ScanClient!
+                var clientBaseURL: URL!
+                var request: URLRequest!
+
+                func listing(_ files: [(name: String, modified: String)]) -> Data {
+                    let responses = files.map { file in
+                        """
+                        <D:response><D:href>/\(file.name)</D:href><D:propstat><D:prop>
+                        <D:displayname>\(file.name)</D:displayname><D:getcontentlength>7</D:getcontentlength>
+                        <D:getlastmodified>\(file.modified)</D:getlastmodified><D:resourcetype/>
+                        </D:prop></D:propstat></D:response>
+                        """
+                    }
+                    let folder = "<D:response><D:href>/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response>"
+                    return Data("<D:multistatus xmlns:D=\"DAV:\">\(folder)\(responses.joined())</D:multistatus>".utf8)
+                }
 
                 beforeEach {
                     fakeSession = FakeHTTPClient()
-                    client = ScanClient(baseURL: baseURL, session: fakeSession)
+                    clientBaseURL = baseURL
                 }
 
-                context("when the server responds with 200 and a valid listing") {
+                justBeforeEach { client = ScanClient(baseURL: clientBaseURL, session: fakeSession) }
+
+                context("when the server responds with 207 and a WebDAV listing") {
                     var scans: [ScanEntry]!
-                    var requestedURL: URL!
 
                     beforeEach {
-                        let body = try! JSONEncoder().encode([scan])
-                        fakeSession.dataHandler = { url in
-                            requestedURL = url
-                            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                        let body = listing([
+                            (name: "older.pdf", modified: "Mon, 12 Oct 2026 21:48:35 GMT"),
+                            (name: "newer.pdf", modified: "Tue, 13 Oct 2026 00:38:33 GMT")
+                        ])
+                        fakeSession.requestHandler = { sent in
+                            request = sent
+                            let response = HTTPURLResponse(url: sent.url!, statusCode: 207, httpVersion: nil, headerFields: nil)!
                             return (body, response)
                         }
-                        scans = try await client.fetchScans()
                     }
 
-                    it("requests files.json under baseURL") {
-                        expect(requestedURL?.absoluteString).to(equal("http://scans.example.com/files.json"))
+                    justBeforeEach { scans = try await client.fetchScans() }
+
+                    it("sends PROPFIND with Depth: 1 to the folder at baseURL") {
+                        expect(request?.httpMethod).to(equal("PROPFIND"))
+                        expect(request?.value(forHTTPHeaderField: "Depth")).to(equal("1"))
+                        expect(request?.url?.absoluteString).to(equal("http://scans.example.com/"))
                     }
 
-                    it("decodes the scans the server returns") {
-                        expect(scans).to(equal([scan]))
+                    it("returns the files, newest first, without the folder itself") {
+                        expect(scans.map(\.name)).to(equal(["newer.pdf", "older.pdf"]))
+                    }
+
+                    context("when baseURL has a path without a trailing slash") {
+                        beforeEach { clientBaseURL = URL(string: "http://10.0.1.111:8081/scans")! }
+
+                        it("adds the trailing slash, since a redirect would drop PROPFIND") {
+                            expect(request?.url?.absoluteString).to(equal("http://10.0.1.111:8081/scans/"))
+                        }
                     }
                 }
 
                 context("when the server responds with a non-2xx status") {
                     beforeEach {
-                        fakeSession.dataHandler = { url in
-                            let response = HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil)!
+                        fakeSession.requestHandler = { sent in
+                            let response = HTTPURLResponse(url: sent.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
                             return (Data(), response)
                         }
                     }
 
                     it("throws ScanClientError.server with that status code") {
                         await expect { try await client.fetchScans() }.to(throwError(ScanClientError.server(500)))
+                    }
+                }
+
+                context("when the server doesn't speak WebDAV") {
+                    beforeEach {
+                        fakeSession.requestHandler = { sent in
+                            let response = HTTPURLResponse(url: sent.url!, statusCode: 405, httpVersion: nil, headerFields: nil)!
+                            return (Data(), response)
+                        }
+                    }
+
+                    it("throws ScanClientError.server(405), which explains there's no WebDAV listing") {
+                        await expect { try await client.fetchScans() }.to(throwError(ScanClientError.server(405)))
+                        expect(ScanClientError.server(405).errorDescription).to(contain("WebDAV"))
                     }
                 }
             }
