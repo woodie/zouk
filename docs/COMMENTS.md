@@ -460,8 +460,10 @@ protocol requirement that omits the parameter outright, so these forward
 explicitly instead of conforming "for free".
 
 ### `ScanClient` (actor)
-Talks to lambada-web's (or scandalous's) HTTP API: GET /files.json for
-the listing, GET /download/:filename for the bytes. Downloaded files are
+Talks WebDAV to the folder at `baseURL`: `PROPFIND` (`Depth: 1`) for the
+listing (read by `WebDAVListing`), then GET and DELETE on each file's own
+address from that listing. Replaced lambada-web's `GET /files.json`
+protocol (lambada issues #19 and #21). Downloaded files are
 cached on disk by name (server-generated, supposedly immutable and never
 reused -- see `ScanEntry`) so a file fetched once to build a thumbnail
 is never fetched twice when the user then clicks Download.
@@ -503,14 +505,13 @@ the panel already resolved any "replace this file?" question before
 this is ever called, so this just writes to exactly the URL it's given.
 
 ### `ScanClient.delete(_:)`
-Kept a one-line comment in place: "DELETE on the same path GET uses to
-download; lambada-web shares one route for both verbs."
+Kept a one-line comment in place: "DELETE on the file's own WebDAV
+address, the same one GET downloads from."
 
 Full history: deletes `scan` from the server: DELETE on the exact same
-server-relative path (`scan.path`) GET already uses to download it.
-lambada-web registers both verbs on the same "/download/:filename"
-resource rather than a separate "/delete/:filename" route, so this only
-changes the HTTP method, not the URL. Doesn't touch the local cache or
+address (`scan.path`, the file's `href` from the WebDAV listing) GET
+already uses to download it. Under lambada-web's old protocol this was
+"/download/:filename", which also took both verbs. Doesn't touch the local cache or
 `AppModel`'s `scans` array -- `AppModel.delete(_:)` does that on
 success.
 
@@ -530,12 +531,41 @@ Full history: whether the file already sitting at `local` is plausibly
 still *this* scan's bytes, not a leftover from some earlier, unrelated
 file that happened to land under the same name.
 
+## Sources/ZoukKit/WebDAVListing.swift
+
+### `WebDAVListing`
+Reads a `PROPFIND` (`Depth: 1`) multistatus reply with Foundation's
+`XMLParser`, namespace-aware so any `DAV:` prefix (`D:`, `d:`) works.
+Skips collections, including the folder itself. Servers serialize an
+empty `resourcetype` differently (`<D:resourcetype></D:resourcetype>` on
+the Pi's nginx, `<D:resourcetype/>` elsewhere), which is why this parses
+the XML rather than matching text. A missing `displayname` falls back to
+the decoded last path component of `href`; an unreadable
+`getlastmodified` leaves `time` empty, so the entry shows "an unknown
+time".
+
+### `ScanClient.fetchLegacyListing()`
+Temporary. lambada-web answers `PROPFIND` with 405 but still serves
+`/files.json`, so on a 405 the listing falls back to it. That lets this
+release go onto a Mac before the server switches to WebDAV (lambada
+#21). Any failure there is reported as the original 405. Remove it, with
+`ScanEntry`'s `Codable` conformance if nothing else needs it, once
+lambada-web is gone.
+
+### `ScanClient.folderURL(_:)`
+`PROPFIND` on a folder address without its trailing slash gets a
+redirect to the slashed address, and following that redirect turns the
+request into a plain GET, so the slash is added up front.
+
 ## Sources/ZoukKit/ScanEntry.swift
 
 ### `ScanEntry` (struct)
 No comment kept in source; the struct is judged self-explanatory now.
-History: mirrors one entry from the `/files.json` endpoint served by
-lambada-web (or scandalous, its Ruby predecessor). `name` is a
+One file from a WebDAV listing, built by `WebDAVListing`: `name` is the
+entry's `displayname`, `size` its `getcontentlength`, `time` its
+`getlastmodified` converted to ISO 8601, and `path` its `href` (still
+percent-encoded, so it can be used directly as a URL path). Earlier it
+mirrored one entry of lambada-web's `/files.json`. On lambada, `name` is a
 server-generated Unix-timestamp filename like "1779907271.pdf" -- never
 user input -- so it's safe to use directly as a local file/cache name
 with no sanitization. `path` is a server-relative download path (e.g.

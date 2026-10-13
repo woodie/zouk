@@ -37,10 +37,11 @@ it's hard to miss.
 
 ## Compatibility
 
-zouk talks `GET /files.json` and expects a `path` field per entry.
-Requires a matching server:
-[scandalous](https://github.com/woodie/scandalous) 0.3.0+ or
-[lambada](https://github.com/woodie/lambada)'s lambada-web 2.0.0+.
+zouk works with any WebDAV folder that allows guest access: it lists the
+folder with a WebDAV `PROPFIND`, and downloads or deletes each file at its
+own address. Enter the folder's address, like `10.0.1.111` or
+`10.0.1.111:8081/scans/`. [lambada](https://github.com/woodie/lambada)'s
+nginx config (`service/lambada.nginx.conf`) is one such server.
 
 ## Development
 

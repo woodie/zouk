@@ -22,7 +22,7 @@ swift test       # or: make test
 - `Sources/ZoukKit` -- model, networking, and views (a library target so
   `Tests/ZoukKitTests` can `@testable import` it).
 - `Sources/zouk` -- the thin `@main` app entry point.
-- `Tests/ZoukKitTests` -- unit tests for hostname parsing, JSON decoding,
+- `Tests/ZoukKitTests` -- unit tests for hostname parsing, WebDAV listing parsing,
   and the URL-resolution logic the download path relies on.
 - `docs/DELIVERY.md` -- how to cut and hand off a build.
 - `docs/COWORK.md` -- context for picking this project back up cold.

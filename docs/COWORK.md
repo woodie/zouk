@@ -9,9 +9,9 @@ the release/signing process, see `docs/DEVELOPER.md`/`docs/DELIVERY.md`.
 ## What this is
 
 zouk is a minimal SwiftUI macOS app for browsing and downloading scans
-from a home scanner/printer, talking to `GET /files.json` /
-`GET /download/:filename` served by `lambada-web` (current production
-backend) or `scandalous` (its Ruby predecessor). The main screen
+from a home scanner/printer, talking WebDAV (`PROPFIND` to list, GET and
+DELETE per file) to a guest-access folder, as served by lambada's nginx
+config. The main screen
 deliberately mimics Finder's "connect to a Samba share" icon grid --
 that's the whole design language to preserve.
 
