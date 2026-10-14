@@ -10,7 +10,7 @@ the release/signing process, see `docs/DEVELOPER.md`/`docs/DELIVERY.md`.
 
 zouk is a minimal SwiftUI macOS app for browsing and downloading scans
 from a home scanner/printer, talking WebDAV (`PROPFIND` to list, GET and
-DELETE per file) to a guest-access folder, as served by lambada's nginx
+DELETE per file, PUT to upload) to a guest-access folder, as served by lambada's nginx
 config. The main screen
 deliberately mimics Finder's "connect to a Samba share" icon grid --
 that's the whole design language to preserve.
@@ -106,6 +106,14 @@ The UI mimics Finder's icon-grid view closely and deliberately:
   from "Move to Trash" doesn't present the dialog -- the NSMenu is still
   tearing down, so the state change needs `Task { @MainActor in ... }` to
   land a beat later.
+
+- **Upload**: files dropped on the grid (`dropDestination(for: URL.self)`,
+  with a dashed accent outline while dragging) or picked with the toolbar's
+  upload button (`NSOpenPanel`) go through `AppModel.upload(_:)`: folders
+  and files over 25 MB (`ScanClient.maxUploadBytes`, nginx's limit) are
+  skipped with a reason, a same-named file asks first (`confirmReplace`, an
+  `NSAlert` in the app, swapped out in tests), then one PUT each and a fresh
+  listing that selects the new file.
 
 ## Not yet done
 

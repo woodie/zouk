@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
+    @State private var isDropTargeted = false
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
 
     var body: some View {
@@ -22,6 +23,13 @@ struct ScanGridView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+                Button { Task { await model.chooseFilesToUpload() } } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(CircularIconButtonStyle())
+                .disabled(model.isBusy)
+                .help("Upload files (or drop them on the window)")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -30,6 +38,21 @@ struct ScanGridView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture { model.selectedScanID = nil }
+                // Files dragged in from Finder upload, like dropping them on a mounted share.
+                .dropDestination(for: URL.self) { urls, _ in
+                    let files = urls.filter(\.isFileURL)
+                    guard !files.isEmpty, !model.isBusy else { return false }
+                    Task { await model.upload(files) }
+                    return true
+                } isTargeted: { isDropTargeted = $0 }
+                .overlay {
+                    if isDropTargeted {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8, 5]))
+                            .padding(6)
+                            .allowsHitTesting(false)
+                    }
+                }
 
             Divider()
 
@@ -47,12 +70,9 @@ struct ScanGridView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: model.savingMessage)
-        // presenting uses pendingDelete, not selectedScan; title mirrors the web listing's confirm() text.
+        // presenting uses pendingDelete, not selectedScan; title mirrors the web page's confirm() text.
         .confirmationDialog(
-            model.pendingDelete.map {
-                "Delete this scan from \($0.timeAgo(relativeTo: Date()))?"
-            }
-                ?? "Delete this scan?",
+            model.pendingDelete.map { "Delete \($0.name)?" } ?? "Delete this file?",
             isPresented: Binding(
                 get: { model.pendingDelete != nil },
                 set: { isPresented in if !isPresented { model.pendingDelete = nil } }
@@ -85,9 +105,9 @@ struct ScanGridView: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .help("Delete this scan")
+                .help("Delete this file")
             } else {
-                Text(model.scans.isEmpty ? "" : "\(model.scans.count) scans")
+                Text(model.scans.isEmpty ? "" : model.scans.count == 1 ? "1 file" : "\(model.scans.count) files")
             }
             Spacer()
         }
@@ -116,7 +136,7 @@ struct ScanGridView: View {
             Spacer()
         } else if model.scans.isEmpty {
             Spacer()
-            Text(model.isBusy ? "Loading…" : "No scans found.")
+            Text(model.isBusy ? "Loading…" : "No files yet. Drop files here to upload.")
                 .foregroundStyle(.secondary)
             Spacer()
         } else {
@@ -224,36 +244,28 @@ private struct ScanThumbnailCell: View {
                     // Tuned against real side-by-side measurements on real hardware (huck's own
                     // placeholder-matched 76x96 read too small; 96x120 -- filling the full outer
                     // frame -- read too big; 86x108 still read a real ~13% larger than huck's
-                    // thumbnail). 82x104 is the real-measurement-derived middle ground. Outer
-                    // 96x120 stays fixed either way, matching DogEaredDocumentIcon's own
-                    // double-frame below, so the cell's overall footprint doesn't change between
-                    // cached and uncached scans.
+                    // thumbnail). 82x104 is the real-measurement-derived middle ground for a page.
+                    // Backing, corners and the selection halo all go on the fitted image, before
+                    // the max frame (which takes all the space it's offered), so they hug the
+                    // picture: a page stays page-shaped, and a wide upload keeps its own shape,
+                    // halo included, instead of sitting in a tall tile. The outer 108x132 matches
+                    // the placeholder below, so the cell's footprint never changes.
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 82, height: 104)
                         .background(Color(nsColor: .textBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .frame(width: 96, height: 120)
+                        .modifier(SelectionHalo(isSelected: isSelected, tint: selectionTint))
+                        .frame(maxWidth: 108, maxHeight: 116)
+                        .frame(width: 108, height: 132)
                 } else {
                     // Drawn, not clipped, so the dog-ear fold and shadow render like Finder's placeholder.
                     DogEaredDocumentIcon()
                         .frame(width: 76, height: 96)
                         .frame(width: 96, height: 120)
+                        .modifier(SelectionHalo(isSelected: isSelected, tint: selectionTint))
                 }
             }
-            // Padding stays constant so selection only toggles tint/shadow, not layout.
-            .padding(6)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? selectionTint.opacity(0.15) : Color.clear)
-            )
-            .shadow(
-                color: isSelected ? selectionTint.opacity(0.55) : .clear,
-                radius: isSelected ? 7 : 0,
-                x: 0,
-                y: isSelected ? 2 : 0
-            )
             Text(scan.name)
                 .font(.callout)
                 .lineLimit(1)
@@ -300,5 +312,27 @@ private struct ScanThumbnailCell: View {
             }
         }
         .task { image = await model.thumbnail(for: scan) }
+    }
+}
+
+// A tinted rounded tile plus a soft glow behind whatever it wraps. Padding stays constant so
+// selection only toggles tint/shadow, not layout.
+private struct SelectionHalo: ViewModifier {
+    let isSelected: Bool
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? tint.opacity(0.15) : Color.clear)
+            )
+            .shadow(
+                color: isSelected ? tint.opacity(0.55) : .clear,
+                radius: isSelected ? 7 : 0,
+                x: 0,
+                y: isSelected ? 2 : 0
+            )
     }
 }

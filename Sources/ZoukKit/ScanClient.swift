@@ -20,6 +20,7 @@ public protocol ScanHTTPClient: Sendable {
     func data(from url: URL) async throws -> (Data, URLResponse)
     func download(from url: URL) async throws -> (URL, URLResponse)
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
+    func upload(for request: URLRequest, fromFile fileURL: URL) async throws -> (Data, URLResponse)
 }
 
 extension URLSession: ScanHTTPClient {
@@ -35,9 +36,16 @@ extension URLSession: ScanHTTPClient {
     public func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         try await data(for: request, delegate: nil)
     }
+
+    public func upload(for request: URLRequest, fromFile fileURL: URL) async throws -> (Data, URLResponse) {
+        try await upload(for: request, fromFile: fileURL, delegate: nil)
+    }
 }
 
 public actor ScanClient {
+    // lambada's nginx refuses bigger uploads (client_max_body_size 25m).
+    public static let maxUploadBytes = 25 * 1024 * 1024
+
     public let baseURL: URL
     private let session: any ScanHTTPClient
 
@@ -117,6 +125,24 @@ public actor ScanClient {
         request.httpMethod = "DELETE"
         let (_, response) = try await session.data(for: request)
         try Self.checkOK(response)
+    }
+
+    // PUT into the folder under the file's own name, the way Finder and lambada's web page upload.
+    public func upload(_ file: URL) async throws {
+        guard let remote = Self.uploadURL(for: file.lastPathComponent, in: baseURL) else {
+            throw ScanClientError.invalidResponse
+        }
+        var request = URLRequest(url: remote)
+        request.httpMethod = "PUT"
+        let (_, response) = try await session.upload(for: request, fromFile: file)
+        try Self.checkOK(response)
+    }
+
+    // Encodes everything but plain path characters, so a name like "a:b #1.pdf" stays one segment.
+    nonisolated static func uploadURL(for name: String, in baseURL: URL) -> URL? {
+        let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/:;"))
+        guard let encoded = name.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: folderURL(baseURL).absoluteString + encoded)
     }
 
     // Finder-style de-dup naming: "scan.pdf" -> "scan (1).pdf" instead of overwriting.

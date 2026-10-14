@@ -21,6 +21,7 @@ protocol ScanFetching: Sendable {
     @discardableResult
     func save(_ scan: ScanEntry, to destination: URL, cacheDirectory: URL) async throws -> URL
     func delete(_ scan: ScanEntry) async throws
+    func upload(_ file: URL) async throws
 }
 
 extension ScanClient: ScanFetching {}
@@ -51,6 +52,8 @@ public final class AppModel: ObservableObject {
     // production code never overrides the default.
     private let clientFactory: (URL) -> any ScanFetching
     private var thumbnailCache: [String: NSImage] = [:]
+    // Asked before an upload replaces a file of the same name; tests swap in their own answer.
+    var confirmReplace: @MainActor (String) -> Bool = AppModel.askToReplace
 
     public convenience init(
         defaults: UserDefaults = .standard,
@@ -151,8 +154,15 @@ public final class AppModel: ObservableObject {
         guard let client else { return nil }
         do {
             let fileURL = try await client.cachedFile(for: scan, in: cacheDirectory)
-            guard let document = PDFDocument(url: fileURL), let page = document.page(at: 0) else { return nil }
-            let image = page.thumbnail(of: CGSize(width: 160, height: 200), for: .cropBox)
+            // Uploads can be pictures as well as PDFs.
+            let image: NSImage
+            if let document = PDFDocument(url: fileURL), let page = document.page(at: 0) {
+                image = page.thumbnail(of: CGSize(width: 160, height: 200), for: .cropBox)
+            } else if let picture = NSImage(contentsOf: fileURL) {
+                image = picture
+            } else {
+                return nil
+            }
             thumbnailCache[scan.id] = image
             return image
         } catch {
@@ -222,7 +232,9 @@ public final class AppModel: ObservableObject {
         pendingDelete = scan
     }
 
-    // Failure flashes savingMessage rather than state = .failed(...).
+    // Failure flashes savingMessage rather than state = .failed(...), and reloads the list so it
+    // shows what's really there. 404 means another client deleted it first, which is what was
+    // wanted anyway, matching lambada's web page.
     public func delete(_ scan: ScanEntry) async {
         guard let client else { return }
         isBusy = true
@@ -230,13 +242,85 @@ public final class AppModel: ObservableObject {
 
         do {
             try await client.delete(scan)
-            scans.removeAll { $0.id == scan.id }
-            if selectedScanID == scan.id { selectedScanID = nil }
+            removeFromList(scan)
+        } catch ScanClientError.server(404) {
+            removeFromList(scan)
         } catch {
+            if let fresh = try? await client.fetchScans() { scans = fresh }
             savingMessage = "Couldn't delete \(scan.name)."
             try? await Task.sleep(for: .seconds(2))
             savingMessage = nil
         }
+    }
+
+    private func removeFromList(_ scan: ScanEntry) {
+        scans.removeAll { $0.id == scan.id }
+        if selectedScanID == scan.id { selectedScanID = nil }
+    }
+
+    // The toolbar's Upload button.
+    public func chooseFilesToUpload() async {
+        guard client != nil else { return }
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.prompt = "Upload"
+        panel.message = "Choose files to upload to \(hostInput) (up to 25 MB each)."
+        guard panel.runModal() == .OK else { return }
+        await upload(panel.urls)
+    }
+
+    // Files dropped on the grid or chosen with Upload: one PUT each, then a fresh listing.
+    // Folders and files over 25 MB are skipped up front, with the reason in the failure flash.
+    public func upload(_ files: [URL]) async {
+        guard let client, !files.isEmpty else { return }
+        isBusy = true
+        defer { isBusy = false }
+        savedMessage = nil
+
+        var uploaded: [String] = []
+        var failed: [String] = []
+        for file in files {
+            let name = file.lastPathComponent
+            let values = try? file.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+            if values?.isDirectory == true {
+                failed.append("\(name) (a folder)")
+                continue
+            }
+            if (values?.fileSize ?? 0) > ScanClient.maxUploadBytes {
+                failed.append("\(name) (over 25 MB)")
+                continue
+            }
+            if scans.contains(where: { $0.name == name }), !confirmReplace(name) { continue }
+            savingMessage = "Uploading \(name)…"
+            do {
+                try await client.upload(file)
+                uploaded.append(name)
+            } catch {
+                failed.append(name)
+            }
+        }
+        savingMessage = nil
+
+        if let fresh = try? await client.fetchScans() { scans = fresh }
+        if let last = uploaded.last {
+            selectedScanID = last
+            savedMessage = uploaded.count == 1 ? "File \(last) uploaded." : "\(uploaded.count) files uploaded."
+        }
+        if !failed.isEmpty {
+            savingMessage = "Couldn't upload \(failed.joined(separator: ", "))."
+            try? await Task.sleep(for: .seconds(3))
+            savingMessage = nil
+        }
+    }
+
+    private static func askToReplace(_ name: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Replace \(name)?"
+        alert.informativeText = "A file with that name is already there. Uploading replaces it."
+        alert.addButton(withTitle: "Replace")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     public nonisolated static func baseURL(fromHostInput input: String) -> URL? {
