@@ -5,7 +5,6 @@
 [![Release](https://img.shields.io/github/v/release/woodie/zouk.svg)](https://github.com/woodie/zouk/releases/latest)
 [![License](https://img.shields.io/github/license/woodie/zouk.svg)](LICENSE)
 
-![zouk's scan grid, showing two real scans](docs/window.png)
 
 [lambada](https://github.com/woodie/lambada) serves the scans from an old
 scanner (one that needs an open relay) over WebDAV, so a web browser, Finder
@@ -39,6 +38,8 @@ To upload, drag files from Finder onto the window, or click the upload
 button at the right of the toolbar and pick them. Each file can be up to
 25 MB; if one with the same name is already there, zouk asks before
 replacing it.
+
+<img src="docs/window.png" width="472" height="424">
 
 ## Compatibility
 

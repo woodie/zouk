@@ -248,10 +248,13 @@ private struct ScanThumbnailCell: View {
                     // 96x120 stays fixed either way, matching DogEaredDocumentIcon's own
                     // double-frame below, so the cell's overall footprint doesn't change between
                     // cached and uncached scans.
+                    // Max, not fixed, so the backing hugs the picture: a page stays page-shaped
+                    // at about 82x104, and a wide upload keeps its own shape instead of sitting on
+                    // a tall white page.
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 82, height: 104)
+                        .frame(maxWidth: 96, maxHeight: 104)
                         .background(Color(nsColor: .textBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                         .frame(width: 96, height: 120)
