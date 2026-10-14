@@ -7,19 +7,19 @@
 
 ![zouk's scan grid, showing two real scans](docs/window.png)
 
-We now have [tools](https://github.com/woodie/lambada/) to get files from
-an old scanner (that requires an open relay) but downloading files over HTTP
-with a web browser can be a drag (with steps to keep unsafe documents off your
-computer) and setting up HTTPS on your internal network is an absolute pain.
-Finally, serving files with Samba can work but it can be slow and awkward to use.
+[lambada](https://github.com/woodie/lambada) serves the scans from an old
+scanner (one that needs an open relay) over WebDAV, so a web browser, Finder
+and other WebDAV apps can all reach them. Each comes with extra steps, though:
+browsers warn about every download over plain HTTP, and mounting the folder
+means connect-as-guest dialogs and remembering to disconnect.
 
 <img align="left" src="docs/art_smaller.png">
 
-Fear not, now we have the Zouk scan retriever for macOS.
-This minimal Swift app is just what we need for browsing and downloading scans
-through [lambada](https://github.com/woodie/lambada) (created with Go)
-or [scandalous](https://github.com/woodie/scandalous) (created with Ruby).
-The main screen is similar to a Samba share but much faster and easier to use.
+Fear not, now we have the Zouk scan retriever for macOS: the optimized
+experience for downloading scans. Set it up once with your Pi's address, and
+from then on it opens straight to your scans as a grid of thumbnails, with no
+warnings or dialogs to click through. The main screen is similar to a mounted
+network share, but much faster and easier to use.
 
 On launch, zouk asks for a hostname or IP address (e.g.
 `10.0.1.111`) and remembers it for next time.
