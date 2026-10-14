@@ -270,6 +270,32 @@ final class AppModelSpec: AsyncSpec {
                         }
                     }
 
+                    context("when another client already deleted it") {
+                        beforeEach {
+                            fakeClient.deleteHandler = { _ in throw ScanClientError.server(404) }
+                            await MainActor.run { model.selectedScanID = scan.id }
+                        }
+
+                        it("removes it without complaining, since it's gone either way") {
+                            await MainActor.run {
+                                expect(model.scans).to(beEmpty())
+                                expect(model.selectedScanID).to(beNil())
+                                expect(model.savingMessage).to(beNil())
+                            }
+                        }
+                    }
+
+                    context("when the server rejects the delete and the folder has changed") {
+                        beforeEach {
+                            fakeClient.deleteHandler = { _ in throw ScanClientError.server(423) }
+                            fakeClient.fetchScansHandler = { return [] }
+                        }
+
+                        it("reloads the list, so it shows what's really there") {
+                            await MainActor.run { expect(model.scans).to(beEmpty()) }
+                        }
+                    }
+
                     context("when the server rejects the delete") {
                         beforeEach {
                             fakeClient.deleteHandler = { _ in throw URLError(.unknown) }

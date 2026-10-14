@@ -232,7 +232,9 @@ public final class AppModel: ObservableObject {
         pendingDelete = scan
     }
 
-    // Failure flashes savingMessage rather than state = .failed(...).
+    // Failure flashes savingMessage rather than state = .failed(...), and reloads the list so it
+    // shows what's really there. 404 means another client deleted it first, which is what was
+    // wanted anyway, matching lambada's web page.
     public func delete(_ scan: ScanEntry) async {
         guard let client else { return }
         isBusy = true
@@ -240,13 +242,20 @@ public final class AppModel: ObservableObject {
 
         do {
             try await client.delete(scan)
-            scans.removeAll { $0.id == scan.id }
-            if selectedScanID == scan.id { selectedScanID = nil }
+            removeFromList(scan)
+        } catch ScanClientError.server(404) {
+            removeFromList(scan)
         } catch {
+            if let fresh = try? await client.fetchScans() { scans = fresh }
             savingMessage = "Couldn't delete \(scan.name)."
             try? await Task.sleep(for: .seconds(2))
             savingMessage = nil
         }
+    }
+
+    private func removeFromList(_ scan: ScanEntry) {
+        scans.removeAll { $0.id == scan.id }
+        if selectedScanID == scan.id { selectedScanID = nil }
     }
 
     // The toolbar's Upload button.
