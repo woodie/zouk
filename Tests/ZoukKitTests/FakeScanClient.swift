@@ -6,6 +6,7 @@ final class FakeScanClient: ScanFetching, @unchecked Sendable {
     var cachedFileHandler: ((ScanEntry, URL) throws -> URL)?
     var saveHandler: ((ScanEntry, URL, URL) throws -> URL)?
     var deleteHandler: ((ScanEntry) throws -> Void)?
+    var uploadHandler: ((URL) throws -> Void)?
 
     func fetchScans() async throws -> [ScanEntry] {
         guard let fetchScansHandler else { throw URLError(.unknown) }
@@ -25,5 +26,10 @@ final class FakeScanClient: ScanFetching, @unchecked Sendable {
     func delete(_ scan: ScanEntry) async throws {
         guard let deleteHandler else { throw URLError(.unknown) }
         try deleteHandler(scan)
+    }
+
+    func upload(_ file: URL) async throws {
+        guard let uploadHandler else { throw URLError(.unknown) }
+        try uploadHandler(file)
     }
 }

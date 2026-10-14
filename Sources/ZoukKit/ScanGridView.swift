@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ScanGridView: View {
     @ObservedObject var model: AppModel
+    @State private var isDropTargeted = false
     private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 20)]
 
     var body: some View {
@@ -22,6 +23,13 @@ struct ScanGridView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+                Button { Task { await model.chooseFilesToUpload() } } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(CircularIconButtonStyle())
+                .disabled(model.isBusy)
+                .help("Upload files (or drop them on the window)")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -30,6 +38,21 @@ struct ScanGridView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture { model.selectedScanID = nil }
+                // Files dragged in from Finder upload, like dropping them on a mounted share.
+                .dropDestination(for: URL.self) { urls, _ in
+                    let files = urls.filter(\.isFileURL)
+                    guard !files.isEmpty, !model.isBusy else { return false }
+                    Task { await model.upload(files) }
+                    return true
+                } isTargeted: { isDropTargeted = $0 }
+                .overlay {
+                    if isDropTargeted {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8, 5]))
+                            .padding(6)
+                            .allowsHitTesting(false)
+                    }
+                }
 
             Divider()
 
@@ -47,12 +70,9 @@ struct ScanGridView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: model.savingMessage)
-        // presenting uses pendingDelete, not selectedScan; title mirrors the web listing's confirm() text.
+        // presenting uses pendingDelete, not selectedScan; title mirrors the web page's confirm() text.
         .confirmationDialog(
-            model.pendingDelete.map {
-                "Delete this scan from \($0.timeAgo(relativeTo: Date()))?"
-            }
-                ?? "Delete this scan?",
+            model.pendingDelete.map { "Delete \($0.name)?" } ?? "Delete this file?",
             isPresented: Binding(
                 get: { model.pendingDelete != nil },
                 set: { isPresented in if !isPresented { model.pendingDelete = nil } }
@@ -85,9 +105,9 @@ struct ScanGridView: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .help("Delete this scan")
+                .help("Delete this file")
             } else {
-                Text(model.scans.isEmpty ? "" : "\(model.scans.count) scans")
+                Text(model.scans.isEmpty ? "" : model.scans.count == 1 ? "1 file" : "\(model.scans.count) files")
             }
             Spacer()
         }
@@ -116,7 +136,7 @@ struct ScanGridView: View {
             Spacer()
         } else if model.scans.isEmpty {
             Spacer()
-            Text(model.isBusy ? "Loading…" : "No scans found.")
+            Text(model.isBusy ? "Loading…" : "No files yet. Drop files here to upload.")
                 .foregroundStyle(.secondary)
             Spacer()
         } else {

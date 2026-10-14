@@ -6,6 +6,7 @@ final class FakeHTTPClient: ScanHTTPClient, @unchecked Sendable {
     var dataHandler: ((URL) throws -> (Data, URLResponse))?
     var downloadHandler: ((URL) throws -> (URL, URLResponse))?
     var requestHandler: ((URLRequest) throws -> (Data, URLResponse))?
+    var uploadHandler: ((URLRequest, URL) throws -> (Data, URLResponse))?
 
     func data(from url: URL) async throws -> (Data, URLResponse) {
         guard let dataHandler else { throw URLError(.unknown) }
@@ -20,5 +21,10 @@ final class FakeHTTPClient: ScanHTTPClient, @unchecked Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         guard let requestHandler else { throw URLError(.unknown) }
         return try requestHandler(request)
+    }
+
+    func upload(for request: URLRequest, fromFile fileURL: URL) async throws -> (Data, URLResponse) {
+        guard let uploadHandler else { throw URLError(.unknown) }
+        return try uploadHandler(request, fileURL)
     }
 }

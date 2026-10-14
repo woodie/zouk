@@ -267,6 +267,75 @@ final class ScanClientSpec: AsyncSpec {
                 }
             }
 
+            describe("#upload(_:)") {
+                var fakeSession: FakeHTTPClient!
+                var client: ScanClient!
+                var file: URL!
+
+                beforeEach {
+                    fakeSession = FakeHTTPClient()
+                    client = ScanClient(baseURL: baseURL, session: fakeSession)
+                    file = FileManager.default.temporaryDirectory.appendingPathComponent("my scan #1.pdf")
+                }
+
+                context("when the server responds with 201") {
+                    var sentRequest: URLRequest!
+                    var sentFile: URL!
+
+                    beforeEach {
+                        fakeSession.uploadHandler = { request, fileURL in
+                            sentRequest = request
+                            sentFile = fileURL
+                            let response = HTTPURLResponse(
+                                url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil
+                            )!
+                            return (Data(), response)
+                        }
+                        try await client.upload(file)
+                    }
+
+                    it("sends PUT to the folder under the file's own name, encoded") {
+                        expect(sentRequest?.httpMethod).to(equal("PUT"))
+                        expect(sentRequest?.url?.absoluteString).to(equal("http://scans.example.com/my%20scan%20%231.pdf"))
+                    }
+
+                    it("sends the file itself as the body") {
+                        expect(sentFile).to(equal(file))
+                    }
+                }
+
+                context("when the server refuses it") {
+                    beforeEach {
+                        fakeSession.uploadHandler = { request, _ in
+                            let response = HTTPURLResponse(
+                                url: request.url!, statusCode: 413, httpVersion: nil, headerFields: nil
+                            )!
+                            return (Data(), response)
+                        }
+                    }
+
+                    it("throws ScanClientError.server with that status code") {
+                        await expect { try await client.upload(file) }.to(throwError(ScanClientError.server(413)))
+                    }
+                }
+            }
+
+            describe(".uploadURL(for:in:)") {
+                context("when the name has a colon") {
+                    it("encodes it, so it can't be read as a URL scheme") {
+                        let url = ScanClient.uploadURL(for: "a:b.pdf", in: baseURL)
+                        expect(url?.absoluteString).to(equal("http://scans.example.com/a%3Ab.pdf"))
+                    }
+                }
+
+                context("when baseURL has a path without a trailing slash") {
+                    it("puts the file inside that folder") {
+                        let url = ScanClient.uploadURL(for: "a.pdf", in: URL(string: "http://10.0.1.111:8081/scans")!)
+                        expect(url?.absoluteString).to(equal("http://10.0.1.111:8081/scans/a.pdf"))
+                    }
+                }
+            }
+
             describe("#save(_:to:cacheDirectory:)") {
                 var fakeSession: FakeHTTPClient!
                 var client: ScanClient!

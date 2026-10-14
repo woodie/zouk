@@ -285,6 +285,106 @@ final class AppModelSpec: AsyncSpec {
                         }
                     }
                 }
+
+                describe("#upload(_:)") {
+                    nonisolated(unsafe) var folder: URL!
+                    nonisolated(unsafe) var files: [URL]!
+                    nonisolated(unsafe) var sent: [String]!
+                    nonisolated(unsafe) var asked: [String]!
+
+                    func makeFile(_ name: String, bytes: Int = 7) -> URL {
+                        let url = folder.appendingPathComponent(name)
+                        FileManager.default.createFile(atPath: url.path, contents: nil)
+                        // truncate(atOffset:) makes a sparse file, so a 26 MB test file costs nothing.
+                        let handle = try! FileHandle(forWritingTo: url)
+                        try! handle.truncate(atOffset: UInt64(bytes))
+                        try! handle.close()
+                        return url
+                    }
+
+                    beforeEach {
+                        folder = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("zouk-upload-\(UUID().uuidString)", isDirectory: true)
+                        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                        sent = []
+                        asked = []
+                        let uploadedScan = ScanEntry(
+                            name: "notes.pdf", size: 7, time: "2026-10-13T15:00:00-07:00", path: "/notes.pdf"
+                        )
+                        fakeClient.uploadHandler = { file in sent.append(file.lastPathComponent) }
+                        let listed = [uploadedScan, scan!]
+                        fakeClient.fetchScansHandler = { listed }
+                        await MainActor.run {
+                            model.confirmReplace = { name in
+                                asked.append(name)
+                                return true
+                            }
+                        }
+                    }
+
+                    afterEach { try? FileManager.default.removeItem(at: folder) }
+
+                    justBeforeEach { await model.upload(files) }
+
+                    context("with one new file") {
+                        beforeEach { files = [makeFile("notes.pdf")] }
+
+                        it("uploads it without asking") {
+                            expect(sent).to(equal(["notes.pdf"]))
+                            expect(asked).to(beEmpty())
+                        }
+
+                        it("reloads the list, selects the new file and says it's uploaded") {
+                            await MainActor.run {
+                                expect(model.scans.map(\.name)).to(equal(["notes.pdf", scan.name]))
+                                expect(model.selectedScanID).to(equal("notes.pdf"))
+                                expect(model.savedMessage).to(equal("File notes.pdf uploaded."))
+                            }
+                        }
+                    }
+
+                    context("with a file over 25 MB") {
+                        beforeEach { files = [makeFile("big.zip", bytes: ScanClient.maxUploadBytes + 1)] }
+
+                        it("doesn't send it, and clears the failure flash afterward") {
+                            expect(sent).to(beEmpty())
+                            await MainActor.run { expect(model.savingMessage).to(beNil()) }
+                        }
+                    }
+
+                    context("with the name of a file already listed") {
+                        beforeEach { files = [makeFile(scan.name)] }
+
+                        it("asks before replacing it") {
+                            expect(asked).to(equal([scan.name]))
+                            expect(sent).to(equal([scan.name]))
+                        }
+
+                        context("when the answer is no") {
+                            beforeEach {
+                                await MainActor.run { model.confirmReplace = { _ in false } }
+                            }
+
+                            it("sends nothing") {
+                                expect(sent).to(beEmpty())
+                            }
+                        }
+                    }
+
+                    context("when the server refuses the upload") {
+                        beforeEach {
+                            files = [makeFile("notes.pdf")]
+                            fakeClient.uploadHandler = { _ in throw ScanClientError.server(403) }
+                        }
+
+                        it("says nothing was uploaded, and clears the failure flash afterward") {
+                            await MainActor.run {
+                                expect(model.savedMessage).to(beNil())
+                                expect(model.savingMessage).to(beNil())
+                            }
+                        }
+                    }
+                }
             }
         }
     }

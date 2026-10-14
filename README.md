@@ -35,11 +35,16 @@ you'll see a brief "Saving…" note, and once it's done the footer reads
 "File … saved." and stays that way until you click something else, so
 it's hard to miss.
 
+To upload, drag files from Finder onto the window, or click the upload
+button at the right of the toolbar and pick them. Each file can be up to
+25 MB; if one with the same name is already there, zouk asks before
+replacing it.
+
 ## Compatibility
 
 zouk works with any WebDAV folder that allows guest access: it lists the
-folder with a WebDAV `PROPFIND`, and downloads or deletes each file at its
-own address. Enter the folder's address, like `10.0.1.111` or
+folder with a WebDAV `PROPFIND`, downloads or deletes each file at its own
+address, and uploads with `PUT`. Enter the folder's address, like `10.0.1.111` or
 `10.0.1.111:8081/scans/`. [lambada](https://github.com/woodie/lambada)'s
 nginx config (`service/lambada.nginx.conf`) is one such server.
 
