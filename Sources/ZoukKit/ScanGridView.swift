@@ -244,40 +244,28 @@ private struct ScanThumbnailCell: View {
                     // Tuned against real side-by-side measurements on real hardware (huck's own
                     // placeholder-matched 76x96 read too small; 96x120 -- filling the full outer
                     // frame -- read too big; 86x108 still read a real ~13% larger than huck's
-                    // thumbnail). 82x104 is the real-measurement-derived middle ground. Outer
-                    // 96x120 stays fixed either way, matching DogEaredDocumentIcon's own
-                    // double-frame below, so the cell's overall footprint doesn't change between
-                    // cached and uncached scans.
-                    // Backing and corners go on the fitted image, before the max frame (which takes
-                    // all the space it's offered), so they hug the picture: a page stays page-shaped
-                    // at about 82x104, and a wide upload keeps its own shape instead of sitting on
-                    // a tall white page.
+                    // thumbnail). 82x104 is the real-measurement-derived middle ground for a page.
+                    // Backing, corners and the selection halo all go on the fitted image, before
+                    // the max frame (which takes all the space it's offered), so they hug the
+                    // picture: a page stays page-shaped, and a wide upload keeps its own shape,
+                    // halo included, instead of sitting in a tall tile. The outer 108x132 matches
+                    // the placeholder below, so the cell's footprint never changes.
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
                         .background(Color(nsColor: .textBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .frame(maxWidth: 96, maxHeight: 104)
-                        .frame(width: 96, height: 120)
+                        .modifier(SelectionHalo(isSelected: isSelected, tint: selectionTint))
+                        .frame(maxWidth: 108, maxHeight: 116)
+                        .frame(width: 108, height: 132)
                 } else {
                     // Drawn, not clipped, so the dog-ear fold and shadow render like Finder's placeholder.
                     DogEaredDocumentIcon()
                         .frame(width: 76, height: 96)
                         .frame(width: 96, height: 120)
+                        .modifier(SelectionHalo(isSelected: isSelected, tint: selectionTint))
                 }
             }
-            // Padding stays constant so selection only toggles tint/shadow, not layout.
-            .padding(6)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? selectionTint.opacity(0.15) : Color.clear)
-            )
-            .shadow(
-                color: isSelected ? selectionTint.opacity(0.55) : .clear,
-                radius: isSelected ? 7 : 0,
-                x: 0,
-                y: isSelected ? 2 : 0
-            )
             Text(scan.name)
                 .font(.callout)
                 .lineLimit(1)
@@ -324,5 +312,27 @@ private struct ScanThumbnailCell: View {
             }
         }
         .task { image = await model.thumbnail(for: scan) }
+    }
+}
+
+// A tinted rounded tile plus a soft glow behind whatever it wraps. Padding stays constant so
+// selection only toggles tint/shadow, not layout.
+private struct SelectionHalo: ViewModifier {
+    let isSelected: Bool
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? tint.opacity(0.15) : Color.clear)
+            )
+            .shadow(
+                color: isSelected ? tint.opacity(0.55) : .clear,
+                radius: isSelected ? 7 : 0,
+                x: 0,
+                y: isSelected ? 2 : 0
+            )
     }
 }
