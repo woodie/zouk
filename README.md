@@ -72,8 +72,8 @@ casks automatically:
 brew upgrade --cask zouk
 ```
 
-<a href ="https://github.com/woodie/zouk/releases/latest"><img align="left" width="100" 
-  src="https://github.com/user-attachments/assets/e6b7a037-700f-42ef-9848-d4311b0427b8" /></a>
+<a href ="https://github.com/woodie/zouk/releases/latest"><img
+   align="left" width="100" src="docs/pks.png" /></a>
 
 Grab the latest `.pkg` from the
 [Releases page](https://github.com/woodie/zouk/releases/latest) and
