@@ -65,16 +65,16 @@ double-click it -- Next, Next, Done, like any other Mac installer.
 Zouk is signed and notarized so it installs and launches with no 
 Gatekeeper warning -- just the routine "downloaded from the Internet" 
 notice macOS shows on any first launch, with a normal Open button.
-For Windows try [`Huck`](https://github.com/woodie/huck).
+For Windows, try [Huck](https://github.com/woodie/huck).
 <br clear="all">
 
-### homebrew
+### Homebrew
 
 ```
 # install
 brew tap woodie/zouk
 brew install --cask zouk
 
-# install
+# upgrade
 brew upgrade --cask zouk
 ```
