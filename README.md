@@ -58,20 +58,6 @@ Building from source and the project layout moved to
 
 ### macOS
 
-**Homebrew install or direct pkg download**
-
-```
-brew tap woodie/zouk
-brew install --cask zouk
-```
-
-Already installed and want the latest version? Homebrew won't upgrade
-casks automatically:
-
-```
-brew upgrade --cask zouk
-```
-
 <a href ="https://github.com/woodie/zouk/releases/latest"><img
    align="left" width="100" src="docs/pkg.png" /></a>
 
@@ -82,3 +68,12 @@ Zouk is signed and notarized so it installs and launches with no
 Gatekeeper warning -- just the routine "downloaded from the Internet" 
 notice macOS shows on any first launch, with a normal Open button.
 For Windows try [`Huck`](https://github.com/woodie/huck).
+
+```
+#homebrew install
+brew tap woodie/zouk
+brew install --cask zouk
+
+#homebrew install
+brew upgrade --cask zouk
+```
