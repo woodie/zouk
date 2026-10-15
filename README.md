@@ -54,9 +54,7 @@ nginx config (`service/lambada.nginx.conf`) is one such server.
 Building from source and the project layout moved to
 [docs/DEVELOPER.md](docs/DEVELOPER.md).
 
-## Install
-
-### macOS
+## Install on macOS
 
 <a href ="https://github.com/woodie/zouk/releases/latest"><img
    align="left" width="100" src="docs/pkg.png" /></a>
@@ -68,12 +66,15 @@ Zouk is signed and notarized so it installs and launches with no
 Gatekeeper warning -- just the routine "downloaded from the Internet" 
 notice macOS shows on any first launch, with a normal Open button.
 For Windows try [`Huck`](https://github.com/woodie/huck).
+<br clear="all">
+
+### homebrew
 
 ```
-#homebrew install
+# install
 brew tap woodie/zouk
 brew install --cask zouk
 
-#homebrew install
+# install
 brew upgrade --cask zouk
 ```
