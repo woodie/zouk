@@ -73,7 +73,7 @@ brew upgrade --cask zouk
 ```
 
 <a href ="https://github.com/woodie/zouk/releases/latest"><img
-   align="left" width="100" src="docs/pks.png" /></a>
+   align="left" width="100" src="docs/pkg.png" /></a>
 
 Grab the latest `.pkg` from the
 [Releases page](https://github.com/woodie/zouk/releases/latest) and
