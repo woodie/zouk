@@ -81,8 +81,4 @@ double-click it -- Next, Next, Done, like any other Mac installer.
 Zouk is signed and notarized so it installs and launches with no 
 Gatekeeper warning -- just the routine "downloaded from the Internet" 
 notice macOS shows on any first launch, with a normal Open button.
-
-Zouk is the preferred app for macOS. Need Windows too, or just want one
-cross-platform app? Try [`huck`](https://github.com/woodie/huck)
-instead -- the Kotlin/Compose port of this same app for Windows and
-macOS.
+For Windows try [`Huck`](https://github.com/woodie/huck).
